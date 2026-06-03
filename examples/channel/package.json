@@ -1,0 +1,21 @@
+{
+  "name": "@acme/channel-webhook",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/plugin.js",
+  "description": "Example Omadia channel: accepts inbound JSON webhooks, drives a turn, returns the reply.",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node ../../scripts/build-zip.mjs",
+    "clean": "rm -rf dist out"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "express": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

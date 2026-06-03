@@ -1,0 +1,17 @@
+{
+  "name": "@acme/agent-hello",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/plugin.js",
+  "description": "A minimal example Omadia agent that exposes a single greeting tool.",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node ../../scripts/build-zip.mjs",
+    "clean": "rm -rf dist out"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,79 @@
+schema_version: "1"
+
+# ===========================================================================
+# @acme/channel-webhook — example Omadia channel (inbound JSON webhook).
+# A channel ROUTES turns: it receives native events, translates them to the
+# core IncomingTurn shape, drives the orchestrator, and renders the answer
+# back. It has NO capabilities/playbook of its own (those are for agents).
+# ===========================================================================
+
+identity:
+  id: "@acme/channel-webhook"        # MUST equal package.json "name"
+  kind: "channel"
+  domain: "webhook"
+  name: "Webhook Channel"
+  version: "0.1.0"                   # MUST equal package.json "version"
+  description: "Example Omadia channel: accepts inbound JSON webhooks, drives a turn, returns the reply."
+  authors:
+    - name: "Your Name"
+      email: "you@example.com"
+      url: "https://example.com"
+  license: "MIT"
+  icon: "./assets/icon.svg"
+  categories:
+    - "communication"
+
+compat:
+  core: ">=1.0 <2.0"
+  node: ">=20"
+
+depends_on: []
+
+lifecycle:
+  entry: "dist/plugin.js"            # the module that exports activate(ctx, core)
+  uninstall_policy:
+    entities: "delete"
+    memory: "delete"
+    secrets: "delete"
+
+setup:
+  fields:
+    - key: "signing_secret"
+      type: "secret"
+      label: "Webhook signing secret (optional)"
+      help: "If set, inbound requests must send a matching 'x-webhook-secret' header. Stored encrypted in the vault."
+      required: false
+  self_test: false                   # nothing to validate at install time
+
+permissions:
+  memory:
+    reads: []
+    writes: []
+  graph:
+    reads: []
+    writes: []
+  network:
+    outbound: []
+  filesystem:
+    scratch: false
+
+# Generic admin-UI iframe surface rendered by the Omadia web UI. Must match the
+# admin Router prefix mounted in src/plugin.ts.
+admin_ui_path: "/api/example-channel/admin/index.html"
+
+# Channel block (manifest schema section 14). This channel is webhook-driven,
+# so it declares the inbound route the runtime exposes. The plugin verifies the
+# request itself (see verify_signature) and mounts the handler via ctx.routes.
+channel:
+  transport:
+    kind: "webhook"                  # one of: webhook | websocket | long-poll
+    routes:
+      - path: "/api/example-channel/webhook"
+        method: "POST"
+    verify_signature: true           # plugin checks 'x-webhook-secret' itself
+  capabilities:
+    - "text"
+    - "typing_indicator"
+  adapters:
+    - "text"
+    - "markdown"

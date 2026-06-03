@@ -1,0 +1,101 @@
+schema_version: "1"
+
+# ===========================================================================
+# @acme/agent-hello — a minimal example Omadia agent.
+# Rename every "@acme/agent-hello" / "Your Name" placeholder before publishing.
+# ===========================================================================
+
+identity:
+  id: "@acme/agent-hello"            # MUST equal package.json "name"
+  kind: "agent"
+  domain: "hello"
+  name: "Hello Agent"
+  version: "0.1.0"                   # MUST equal package.json "version"
+  description: "A minimal example Omadia agent that exposes a single greeting tool."
+  authors:
+    - name: "Your Name"
+      email: "you@example.com"
+      url: "https://example.com"
+  license: "MIT"
+  icon: "./assets/icon.svg"
+  categories:
+    - "examples"
+
+compat:
+  core: ">=1.0 <2.0"
+  node: ">=20"
+
+# Other plugins this agent needs activated first (e.g. "@omadia/memory" when
+# the agent reads/writes memory). Empty here — this example is self-contained.
+depends_on: []
+
+lifecycle:
+  entry: "dist/plugin.js"            # the module that exports activate(ctx)
+  uninstall_policy:
+    entities: "delete"
+    memory: "delete"
+    secrets: "delete"
+
+# Operator-filled install form. `type: secret` fields go to the vault and are
+# read via ctx.secrets; everything else is read via ctx.config.
+setup:
+  fields:
+    - key: "greeting"
+      type: "string"
+      label: "Greeting word"
+      help: "The word used to greet, e.g. 'Hello' or 'Hi'."
+      required: false
+      default: "Hello"
+  self_test: true
+
+# Each capability is a tool the orchestrator may call. `id` + `input_schema`
+# MUST match a ctx.tools.register(...) call in src/plugin.ts.
+capabilities:
+  - id: "say_hello"
+    description: "Returns a friendly greeting for the given name."
+    input_schema:
+      type: "object"
+      required: ["name"]
+      properties:
+        name:
+          type: "string"
+          description: "Who to greet."
+    output_schema:
+      type: "object"
+      properties:
+        message: { type: "string" }
+    side_effects: "read"
+    idempotent: true
+    timeout_ms: 5000
+
+# Natural-language guidance the orchestrator uses to decide when to pick this
+# agent and how to prompt it.
+playbook:
+  when_to_use: |
+    A teaching example. Use it to confirm your Omadia install can load,
+    configure and call a custom agent end-to-end.
+  example_prompts:
+    - "Say hello to Ada."
+    - "Greet the team."
+
+# Prompt-partials bundled into the ZIP and loaded at activation. They shape the
+# agent's role/tone without touching code.
+skills:
+  - id: "hello_system_prompt"
+    kind: "prompt_partial"
+    path: "skills/system-prompt.md"
+    description: "Role and tone for the Hello agent."
+    shareable: false
+
+# Least-privilege by default — this example needs nothing external.
+permissions:
+  memory:
+    reads: []
+    writes: []
+  graph:
+    reads: []
+    writes: []
+  network:
+    outbound: []
+  filesystem:
+    scratch: false

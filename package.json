@@ -1,0 +1,31 @@
+{
+  "name": "omadia-plugin-starter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Starter template for building Omadia plugins and channels, with a one-command ZIP build for upload.",
+  "license": "MIT",
+  "homepage": "https://github.com/byte5ai/omadia-plugin-starter",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/byte5ai/omadia-plugin-starter.git"
+  },
+  "workspaces": [
+    "examples/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "build:agent": "npm run build -w examples/agent-plugin",
+    "build:channel": "npm run build -w examples/channel",
+    "clean": "npm run clean --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
