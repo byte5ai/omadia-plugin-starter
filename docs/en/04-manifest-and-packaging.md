@@ -111,14 +111,17 @@ Rules:
 
 ## Uploading
 
-Two routes reach an Omadia host:
+**Today, the only way to install a plugin is the ZIP you just built.** In the
+Omadia admin UI, go to *Store → Upload* and drop it in; the host validates the
+manifest, checks for missing host peers, and registers the plugin. To share a
+plugin with others, hand the ZIP over directly (email, a shared drive, your own
+download link).
 
-1. **Admin UI** — *Store → Upload* posts the ZIP; the host validates the
-   manifest, checks for missing host peers, and registers the plugin. This is
-   the path you'll use day to day.
-2. **A registry/hub** — for distributing to others, a hub stores versioned ZIPs
-   and the host's registry client fetches + verifies them by `sha256`. Consult
-   your Omadia operator for hub credentials and the publish command.
+> ℹ️ **Coming soon: the Omadia Hub.** A public registry where you'll *submit* a
+> plugin once and any Omadia host can discover, fetch and verify it (by
+> `sha256`) — no manual ZIP hand-off. **It is not available yet**; for now the
+> ZIP upload above is the only supported route. The ZIP you build today is
+> exactly the artefact the Hub will accept, so nothing you do now is throwaway.
 
 ## Versioning
 

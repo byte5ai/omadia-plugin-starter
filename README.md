@@ -45,6 +45,11 @@ npm run build
 
 Then open the Omadia **admin UI → Store → Upload** and drop the ZIP in.
 
+> ℹ️ Today, ZIP upload is the **only** way to install a plugin — share it by
+> handing the ZIP over directly. A public **Omadia Hub** for submitting plugins
+> once and having any host fetch them is planned; the ZIP you build now is
+> exactly what it will accept.
+
 ---
 
 ## How it fits together

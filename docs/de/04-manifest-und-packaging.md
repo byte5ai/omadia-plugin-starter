@@ -112,15 +112,18 @@ Regeln:
 
 ## Hochladen
 
-Zwei Wege erreichen einen Omadia-Host:
+**Aktuell ist der einzige Weg, ein Plugin zu installieren, die ZIP, die du
+gerade gebaut hast.** Im Omadia-Admin-UI unter *Store → Upload* reinziehen; der
+Host validiert das Manifest, prüft auf fehlende Host-Peers und registriert das
+Plugin. Zum Teilen reichst du die ZIP direkt weiter (E-Mail, geteiltes
+Laufwerk, eigener Download-Link).
 
-1. **Admin-UI** — *Store → Upload* postet die ZIP; der Host validiert das
-   Manifest, prüft auf fehlende Host-Peers und registriert das Plugin. Das ist
-   der Weg für den Alltag.
-2. **Eine Registry/ein Hub** — zum Verteilen an andere speichert ein Hub
-   versionierte ZIPs, und der Registry-Client des Hosts holt + verifiziert sie
-   per `sha256`. Frag deinen Omadia-Operator nach Hub-Credentials und dem
-   Publish-Befehl.
+> ℹ️ **Bald: der Omadia-Hub.** Eine öffentliche Registry, auf der du ein Plugin
+> einmal *einreichst* und jeder Omadia-Host es entdecken, holen und (per
+> `sha256`) verifizieren kann — ohne manuelle ZIP-Weitergabe. **Das ist noch
+> nicht verfügbar**; bis dahin ist der ZIP-Upload oben der einzige unterstützte
+> Weg. Die ZIP, die du heute baust, ist genau das Artefakt, das der Hub später
+> annehmen wird — nichts davon ist Wegwerfarbeit.
 
 ## Versionierung
 

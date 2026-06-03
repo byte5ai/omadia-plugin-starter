@@ -46,6 +46,11 @@ npm run build
 
 Danach im Omadia **Admin-UI → Store → Upload** die ZIP reinziehen.
 
+> ℹ️ Aktuell ist der ZIP-Upload der **einzige** Weg, ein Plugin zu installieren —
+> zum Teilen reichst du die ZIP direkt weiter. Ein öffentlicher **Omadia-Hub**,
+> auf dem du Plugins einmal einreichst und jeder Host sie holt, ist geplant; die
+> ZIP, die du heute baust, ist genau das, was er annehmen wird.
+
 ---
 
 ## Wie das zusammenspielt
