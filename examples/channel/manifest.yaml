@@ -37,6 +37,32 @@ lifecycle:
     secrets: "delete"
 
 setup:
+  # `guide` (OPTIONAL) — localized markdown shown on the Hub page and in the
+  # Omadia store. For a channel, walk the operator through creating the bot/app
+  # on the provider and wiring the webhook. Keys are locales (`en`, `de`, …).
+  guide:
+    en: |
+      ## Connect the Example Channel
+
+      Replace this with the real steps for your messaging platform. A channel
+      guide usually covers: create the bot/app, copy its token, point the
+      webhook at Omadia. For example:
+
+      1. Create a bot/app in the provider's developer console.
+      2. Copy its **signing secret** (or token).
+      3. Set the provider's webhook URL to `<your-public-base-url>/api/example/webhook`.
+      4. Paste the secret into **Webhook signing secret** below and install.
+    de: |
+      ## Example-Channel verbinden
+
+      Ersetze dies durch die echten Schritte deiner Messaging-Plattform. Eine
+      Channel-Anleitung umfasst meist: Bot/App anlegen, Token kopieren, Webhook
+      auf Omadia zeigen lassen. Zum Beispiel:
+
+      1. Bot/App in der Developer-Console des Anbieters anlegen.
+      2. **Signing Secret** (oder Token) kopieren.
+      3. Webhook-URL des Anbieters auf `<deine-public-base-url>/api/example/webhook` setzen.
+      4. Secret unten in **Webhook signing secret** eintragen und installieren.
   fields:
     - key: "signing_secret"
       type: "secret"

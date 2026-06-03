@@ -43,6 +43,11 @@ lifecycle:
     secrets:  "delete"
 
 setup:
+  guide:                       # optionale lokalisierte Anleitung (Markdown)
+    en: |                      # wie man das Drittsystem aufsetzt
+      ## Create the bot / get the API key, step by step …
+    de: |                      # mindestens `en` mitliefern; `de` etc. nach Möglichkeit
+      ## Bot anlegen / API-Key besorgen, Schritt für Schritt …
   fields:                      # Operator-Eingabeformular bei der Installation
     - key: "api_key"
       type: "secret"           # string | url | secret | oauth | enum | boolean | integer | host_list
@@ -93,6 +98,18 @@ channel:
 > Agents deklarieren `capabilities` + `playbook`; Channels deklarieren
 > stattdessen den `channel`-Block. Nicht mischen.
 
+### `setup.guide` — Anleitung für das Drittsystem
+
+`setup.guide` ist eine **optionale** lokalisierte Markdown-Anleitung, die
+automatisch auf der Hub-Seite deines Plugins und im Omadia-Store neben dem
+Install-Formular gerendert wird. Damit erklärst du, was der Operator **außerhalb**
+von Omadia tun muss — einen Discord-Bot anlegen, eine Azure-AD-App registrieren,
+einen API-Key holen. Sie ist nach Locale gekeyt (`en`, `de`, …); liefere
+mindestens `en` mit. Markdown unterstützt Überschriften, nummerierte Listen,
+Links und Code. Sie ist reine Anzeige (wird nie ausgeführt) und wird unverändert
+ins ZIP kopiert, reist also mit deinem Plugin mit. Weglassen, wenn dein Plugin
+keinen externen Setup braucht.
+
 ## Was in die ZIP kommt
 
 `scripts/build-zip.mjs` staged und zippt genau diese (falls vorhanden):
@@ -137,6 +154,7 @@ halten) — und baue neu; der ZIP-Name (`out/<id>-<version>.zip`) ändert sich m
 - [ ] `lifecycle.entry: "dist/plugin.js"`.
 - [ ] Jedes registrierte Tool hat einen passenden `capabilities`-Eintrag (Agents).
 - [ ] Jeder `ctx.secrets`/`ctx.config`-Key hat einen `setup.fields`-Eintrag.
+- [ ] Drittsystem-Setup (falls vorhanden) in einer lokalisierten `setup.guide` dokumentiert.
 - [ ] `permissions` listen genau die Hosts/Namespaces, die du nutzt — nicht mehr.
 - [ ] `npm run typecheck` sauber, `npm run build` erzeugt die ZIP.
 - [ ] Platzhalter (`@acme/*`, `Your Name`) ersetzt.

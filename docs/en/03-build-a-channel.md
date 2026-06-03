@@ -136,6 +136,12 @@ npm run build -w examples/channel
 # → examples/channel/out/acme-channel-webhook-0.1.0.zip
 ```
 
+> **Document the bot setup.** A channel almost always needs the operator to
+> create a bot/app on the provider first (token, webhook secret, invite). Put
+> those steps in a localized `setup.guide` in your manifest — it renders on the
+> Hub page and next to the install form. See
+> [Manifest & packaging](./04-manifest-and-packaging.md).
+
 Upload, fill setup, then exercise the webhook:
 
 ```bash

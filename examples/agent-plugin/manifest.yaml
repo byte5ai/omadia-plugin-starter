@@ -39,6 +39,34 @@ lifecycle:
 # Operator-filled install form. `type: secret` fields go to the vault and are
 # read via ctx.secrets; everything else is read via ctx.config.
 setup:
+  # `guide` (OPTIONAL) is a localized markdown installation guide for your
+  # plugin's third-party system. Keys are locales (`en`, `de`, …). It renders
+  # automatically on the Hub plugin page and in the Omadia store, next to the
+  # install form. Use it to explain steps the operator must do OUTSIDE Omadia
+  # (create an account, register an app, get an API key, …). Ship at least
+  # `en`; add `de` (and others) when you can. Delete it if there is no external
+  # setup.
+  guide:
+    en: |
+      ## Set up the Example Greeter
+
+      This demo plugin needs no third-party account — replace this guide with the
+      real steps for your service. A good guide answers "how do I get the values
+      the install form asks for?". For example:
+
+      1. Create an account at **your-provider.com**.
+      2. Under *Settings → Developers*, generate an **API key**.
+      3. Paste it into the field below and install.
+    de: |
+      ## Example Greeter einrichten
+
+      Dieses Demo-Plugin braucht kein Drittkonto — ersetze diese Anleitung durch
+      die echten Schritte deines Dienstes. Eine gute Anleitung beantwortet „Wie
+      komme ich an die Werte, die das Install-Formular abfragt?". Zum Beispiel:
+
+      1. Konto auf **your-provider.com** erstellen.
+      2. Unter *Settings → Developers* einen **API-Key** erzeugen.
+      3. Key unten in das Feld eintragen und installieren.
   fields:
     - key: "greeting"
       type: "string"

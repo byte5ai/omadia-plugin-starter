@@ -43,6 +43,11 @@ lifecycle:
     secrets:  "delete"
 
 setup:
+  guide:                       # optional localized install guide (markdown)
+    en: |                      # how to set up the third-party system
+      ## Create the bot / get the API key, step by step …
+    de: |                      # ship at least `en`; add `de` and others if you can
+      ## Bot anlegen / API-Key besorgen, Schritt für Schritt …
   fields:                      # operator-filled install form
     - key: "api_key"
       type: "secret"           # string | url | secret | oauth | enum | boolean | integer | host_list
@@ -93,6 +98,17 @@ channel:
 > Agents declare `capabilities` + `playbook`; channels declare the `channel`
 > block instead. Don't mix them.
 
+### `setup.guide` — third-party setup instructions
+
+`setup.guide` is an **optional** localized markdown guide that renders
+automatically on your plugin's Hub page and in the Omadia store, next to the
+install form. Use it to explain what the operator must do **outside** Omadia —
+create a Discord bot, register an Azure AD app, get an API key. It is keyed by
+locale (`en`, `de`, …); ship at least `en`. Markdown supports headings, ordered
+lists, links and code. It is display-only (never executed) and is copied
+verbatim into the ZIP, so it ships with your plugin. Omit it when your plugin
+needs no external setup.
+
 ## What goes in the ZIP
 
 `scripts/build-zip.mjs` stages and zips exactly these (when present):
@@ -135,6 +151,7 @@ ZIP name (`out/<id>-<version>.zip`) changes with it.
 - [ ] `lifecycle.entry: "dist/plugin.js"`.
 - [ ] Every registered tool has a matching `capabilities` entry (agents).
 - [ ] Every `ctx.secrets`/`ctx.config` key has a `setup.fields` entry.
+- [ ] Third-party setup (if any) documented in a localized `setup.guide`.
 - [ ] `permissions` list exactly the hosts/namespaces you use — no more.
 - [ ] `npm run typecheck` clean, `npm run build` produces the ZIP.
 - [ ] Placeholders (`@acme/*`, `Your Name`) replaced.
