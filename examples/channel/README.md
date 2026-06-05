@@ -1,6 +1,6 @@
 # Example: `@acme/channel-webhook`
 
-A minimal Omadia **channel** plugin. It accepts an inbound JSON webhook, drives
+A minimal omadia **channel** plugin. It accepts an inbound JSON webhook, drives
 an orchestrator turn, and returns the assembled reply. Use it as the skeleton
 for a real platform adapter (Discord, Slack, Telegram, …).
 
@@ -21,7 +21,7 @@ npm run build -w examples/channel
 # → examples/channel/out/acme-channel-webhook-0.1.0.zip
 ```
 
-Upload that ZIP in the Omadia admin UI (**Store → Upload**).
+Upload that ZIP in the omadia admin UI (**Store → Upload**).
 
 ## Try the flow (after install)
 

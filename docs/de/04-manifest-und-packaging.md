@@ -101,9 +101,9 @@ channel:
 ### `setup.guide` — Anleitung für das Drittsystem
 
 `setup.guide` ist eine **optionale** lokalisierte Markdown-Anleitung, die
-automatisch auf der Hub-Seite deines Plugins und im Omadia-Store neben dem
+automatisch auf der Hub-Seite deines Plugins und im omadia-Store neben dem
 Install-Formular gerendert wird. Damit erklärst du, was der Operator **außerhalb**
-von Omadia tun muss — einen Discord-Bot anlegen, eine Azure-AD-App registrieren,
+von omadia tun muss — einen Discord-Bot anlegen, eine Azure-AD-App registrieren,
 einen API-Key holen. Sie ist nach Locale gekeyt (`en`, `de`, …); liefere
 mindestens `en` mit. Markdown unterstützt Überschriften, nummerierte Listen,
 Links und Code. Sie ist reine Anzeige (wird nie ausgeführt) und wird unverändert
@@ -130,13 +130,13 @@ Regeln:
 ## Hochladen
 
 **Aktuell ist der einzige Weg, ein Plugin zu installieren, die ZIP, die du
-gerade gebaut hast.** Im Omadia-Admin-UI unter *Store → Upload* reinziehen; der
+gerade gebaut hast.** Im omadia-Admin-UI unter *Store → Upload* reinziehen; der
 Host validiert das Manifest, prüft auf fehlende Host-Peers und registriert das
 Plugin. Zum Teilen reichst du die ZIP direkt weiter (E-Mail, geteiltes
 Laufwerk, eigener Download-Link).
 
-> ℹ️ **Bald: der Omadia-Hub.** Eine öffentliche Registry, auf der du ein Plugin
-> einmal *einreichst* und jeder Omadia-Host es entdecken, holen und (per
+> ℹ️ **Bald: der omadia-Hub.** Eine öffentliche Registry, auf der du ein Plugin
+> einmal *einreichst* und jeder omadia-Host es entdecken, holen und (per
 > `sha256`) verifizieren kann — ohne manuelle ZIP-Weitergabe. **Das ist noch
 > nicht verfügbar**; bis dahin ist der ZIP-Upload oben der einzige unterstützte
 > Weg. Die ZIP, die du heute baust, ist genau das Artefakt, das der Hub später

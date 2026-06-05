@@ -7,7 +7,7 @@ Diese Seite bringt dich vom frischen Clone zur hochladbaren ZIP.
 - **Node ≥ 20** (das Repo pinnt **22** über `.nvmrc`; führ `nvm use` aus).
 - Das **`zip`**-CLI (auf macOS/Linux vorinstalliert; unter Windows `7z` oder
   PowerShell `Compress-Archive` nutzen und `scripts/build-zip.mjs` anpassen).
-- Zugang zu einem **Omadia-Host** mit Admin-UI, um das Gebaute zu installieren.
+- Zugang zu einem **omadia-Host** mit Admin-UI, um das Gebaute zu installieren.
 
 ## Installation
 
@@ -30,7 +30,7 @@ Ein Plugin ist ein Ordner, der zu einer ZIP baut, die enthält:
 - `manifest.yaml` — wer du bist, was du brauchst, was du bereitstellst.
 - optional `skills/`, `assets/`.
 
-Bei der Installation tut der Omadia-Host:
+Bei der Installation tut der omadia-Host:
 
 1. liest `manifest.yaml` und validiert es,
 2. merkt sich die Permissions, die du deklariert hast,

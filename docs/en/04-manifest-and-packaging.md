@@ -101,8 +101,8 @@ channel:
 ### `setup.guide` — third-party setup instructions
 
 `setup.guide` is an **optional** localized markdown guide that renders
-automatically on your plugin's Hub page and in the Omadia store, next to the
-install form. Use it to explain what the operator must do **outside** Omadia —
+automatically on your plugin's Hub page and in the omadia store, next to the
+install form. Use it to explain what the operator must do **outside** omadia —
 create a Discord bot, register an Azure AD app, get an API key. It is keyed by
 locale (`en`, `de`, …); ship at least `en`. Markdown supports headings, ordered
 lists, links and code. It is display-only (never executed) and is copied
@@ -128,13 +128,13 @@ Rules:
 ## Uploading
 
 **Today, the only way to install a plugin is the ZIP you just built.** In the
-Omadia admin UI, go to *Store → Upload* and drop it in; the host validates the
+omadia admin UI, go to *Store → Upload* and drop it in; the host validates the
 manifest, checks for missing host peers, and registers the plugin. To share a
 plugin with others, hand the ZIP over directly (email, a shared drive, your own
 download link).
 
-> ℹ️ **Coming soon: the Omadia Hub.** A public registry where you'll *submit* a
-> plugin once and any Omadia host can discover, fetch and verify it (by
+> ℹ️ **Coming soon: the omadia Hub.** A public registry where you'll *submit* a
+> plugin once and any omadia host can discover, fetch and verify it (by
 > `sha256`) — no manual ZIP hand-off. **It is not available yet**; for now the
 > ZIP upload above is the only supported route. The ZIP you build today is
 > exactly the artefact the Hub will accept, so nothing you do now is throwaway.

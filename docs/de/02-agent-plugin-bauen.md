@@ -76,7 +76,7 @@ const apiKey   = await ctx.secrets.require('api_key');            // type: secre
 der Host es nicht ein.
 
 > **Erkläre dem Operator, woher er diese Werte bekommt.** Für alles, was er
-> *außerhalb* von Omadia einrichten muss (API-Key erstellen, App registrieren),
+> *außerhalb* von omadia einrichten muss (API-Key erstellen, App registrieren),
 > ergänze eine lokalisierte `setup.guide` im Manifest — sie wird neben diesen
 > Feldern auf der Hub-Seite und im Store gerendert. Siehe
 > [Manifest & Packaging](./04-manifest-und-packaging.md).

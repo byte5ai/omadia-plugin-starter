@@ -1,15 +1,15 @@
-# Omadia Plugin Starter
+# omadia Plugin Starter
 
-**Bau dir eigene [Omadia](https://omadia.ai)-Plugins und -Channels — und pack
+**Bau dir eigene [omadia](https://omadia.ai)-Plugins und -Channels — und pack
 sie mit einem Befehl in eine hochladbare ZIP.**
 
 > 🇬🇧 This guide is also available [in English](./README.md).
 
-Omadia ist ein agentisches OS: Jeder Agent, jeder Channel und jede Integration
+omadia ist ein agentisches OS: Jeder Agent, jeder Channel und jede Integration
 ist ein **Plugin**, das der Host zur Laufzeit lädt, konfiguriert und sandboxed.
 Dieses Repo ist eine fertige Vorlage zum Forken — mit zwei lauffähigen
 Beispielen und einem Build-Script, das deinen Code in genau die ZIP packt, die
-das Omadia-Admin-UI annimmt.
+das omadia-Admin-UI annimmt.
 
 ---
 
@@ -44,10 +44,10 @@ npm run typecheck
 npm run build
 ```
 
-Danach im Omadia **Admin-UI → Store → Upload** die ZIP reinziehen.
+Danach im omadia **Admin-UI → Store → Upload** die ZIP reinziehen.
 
 > ℹ️ Aktuell ist der ZIP-Upload der **einzige** Weg, ein Plugin zu installieren —
-> zum Teilen reichst du die ZIP direkt weiter. Ein öffentlicher **Omadia-Hub**,
+> zum Teilen reichst du die ZIP direkt weiter. Ein öffentlicher **omadia-Hub**,
 > auf dem du Plugins einmal einreichst und jeder Host sie holt, ist geplant; die
 > ZIP, die du heute baust, ist genau das, was er annehmen wird.
 
@@ -62,7 +62,7 @@ dein Code (src/plugin.ts)
    dist/plugin.js  +  manifest.yaml  +  skills/  +  assets/
         │   zip
         ▼
-   out/<id>-<version>.zip  ──Upload──▶  Omadia-Host
+   out/<id>-<version>.zip  ──Upload──▶  omadia-Host
                                           lädt dist/plugin.js
                                           ruft activate(ctx[, core]) auf
 ```
@@ -92,12 +92,12 @@ omadia-plugin-starter/
 
 ### Zu den SDK-Typ-Stubs
 
-`@omadia/plugin-api` und `@omadia/channel-sdk` werden **vom Omadia-Host zur
+`@omadia/plugin-api` und `@omadia/channel-sdk` werden **vom omadia-Host zur
 Laufzeit bereitgestellt** — sie liegen nicht auf npm, du installierst und
 bundlest sie also nicht. Damit dein Plugin trotzdem offline typecheckt, liefert
 dieses Repo originalgetreue Typ-Stubs in [`types/`](./types). Der Build markiert
 die echten Pakete als `external`, der Host liefert dann die echten
-Implementierungen. Halte die Stubs zu der Omadia-Version aktuell, die du
+Implementierungen. Halte die Stubs zu der omadia-Version aktuell, die du
 anvisierst.
 
 ---

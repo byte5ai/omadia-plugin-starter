@@ -74,7 +74,7 @@ returns `undefined`. Declare each field under `setup.fields` or the host won't
 collect it.
 
 > **Tell the operator how to obtain those values.** For anything they must set
-> up *outside* Omadia (create an API key, register an app), add a localized
+> up *outside* omadia (create an API key, register an app), add a localized
 > `setup.guide` to the manifest — it renders next to these fields on the Hub
 > page and in the store. See [Manifest & packaging](./04-manifest-and-packaging.md).
 

@@ -1,6 +1,6 @@
 # Example: `@acme/agent-hello`
 
-A minimal Omadia **agent** plugin. It registers one native tool, `say_hello`,
+A minimal omadia **agent** plugin. It registers one native tool, `say_hello`,
 that returns a greeting. Use it as the skeleton for your own agent.
 
 ## What's here
@@ -20,7 +20,7 @@ npm run build -w examples/agent-plugin
 # → examples/agent-plugin/out/acme-agent-hello-0.1.0.zip
 ```
 
-Upload that ZIP in the Omadia admin UI (**Store → Upload**).
+Upload that ZIP in the omadia admin UI (**Store → Upload**).
 
 ## Make it yours
 
