@@ -1,15 +1,24 @@
-# omadia Plugin Starter
+<div align="center">
 
-**Bau dir eigene [omadia](https://omadia.ai)-Plugins und -Channels — und pack
-sie mit einem Befehl in eine hochladbare ZIP.**
+# omadia plugin starter
 
-> 🇬🇧 This guide is also available [in English](./README.md).
+### Bau dir eigene [omadia](https://omadia.ai)-Plugins und -Channels, und pack sie mit einem Befehl in eine hochladbare ZIP.
 
-omadia ist ein agentisches OS: Jeder Agent, jeder Channel und jede Integration
-ist ein **Plugin**, das der Host zur Laufzeit lädt, konfiguriert und sandboxed.
-Dieses Repo ist eine fertige Vorlage zum Forken — mit zwei lauffähigen
-Beispielen und einem Build-Script, das deinen Code in genau die ZIP packt, die
-das omadia-Admin-UI annimmt.
+Eine fertige Vorlage zum Forken, mit zwei lauffähigen Beispielen und einem Build-Script, das deinen Code in genau die ZIP packt, die das omadia-Admin-UI annimmt. Forken, deine Logik einsetzen, ausliefern.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](./LICENSE)
+[![Built for omadia](https://img.shields.io/badge/built%20for-omadia-2496ED.svg)](https://github.com/byte5ai/omadia)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+
+[**Haupt-Repo**](https://github.com/byte5ai/omadia) · [**Website**](https://omadia.ai) · [**Plugin-Hub**](https://hub.omadia.ai) · [**Schnellstart**](#schnellstart) · [**Doku**](#dokumentation)
+
+🇬🇧 This guide is also available [in English](./README.md).
+
+</div>
+
+---
+
+omadia ist ein agentisches OS: Jeder Agent, jeder Channel und jede Integration ist ein **Plugin**, das der Host zur Laufzeit lädt, konfiguriert und sandboxed. Dieses Repo ist eine fertige Vorlage zum Forken, mit zwei lauffähigen Beispielen und einem Build-Script, das deinen Code in genau die ZIP packt, die das omadia-Admin-UI annimmt.
 
 ---
 
@@ -18,12 +27,10 @@ das omadia-Admin-UI annimmt.
 | Art | Was es ist | Einstieg | Beispiel |
 | --- | --- | --- | --- |
 | **Agent** | Eine Fähigkeit mit Tools, die der Orchestrator aufrufen kann. | `activate(ctx)` | [`examples/agent-plugin`](./examples/agent-plugin) |
-| **Channel** | Eine Oberfläche (Discord, Slack, ein Webhook…), die Nutzer-Nachrichten rein- und Antworten rausroutet. | `activate(ctx, core)` | [`examples/channel`](./examples/channel) |
-| **Integration** | Ein Connector, der ein externes System als Tools/Services bereitstellt. | `activate(ctx)` | siehe Agent-Beispiel — gleiche Form |
+| **Channel** | Eine Oberfläche (Discord, Slack, ein Webhook), die Nutzer-Nachrichten rein- und Antworten rausroutet. | `activate(ctx, core)` | [`examples/channel`](./examples/channel) |
+| **Integration** | Ein Connector, der ein externes System als Tools/Services bereitstellt. | `activate(ctx)` | siehe Agent-Beispiel, gleiche Form |
 
-Alle drei teilen einen Vertrag: Du exportierst ein `async activate(...)`, das
-ein Handle mit `close()` zurückgibt. Der Unterschied liegt darin, was du in der
-`manifest.yaml` deklarierst und welche `ctx`-Accessoren du nutzt.
+Alle drei teilen einen Vertrag: Du exportierst ein `async activate(...)`, das ein Handle mit `close()` zurückgibt. Der Unterschied liegt darin, was du in der `manifest.yaml` deklarierst und welche `ctx`-Accessoren du nutzt.
 
 ---
 
@@ -36,20 +43,20 @@ nvm use            # oder: Node >= 20 installieren
 npm install        # installiert die geteilte Toolchain (Workspaces)
 
 # Beispiel wählen, Upload-ZIP bauen:
-npm run build:agent      # → examples/agent-plugin/out/acme-agent-hello-0.1.0.zip
-npm run build:channel    # → examples/channel/out/acme-channel-webhook-0.1.0.zip
+npm run build:agent      # -> examples/agent-plugin/out/acme-agent-hello-0.1.0.zip
+npm run build:channel    # -> examples/channel/out/acme-channel-webhook-0.1.0.zip
 
-# …oder alles typechecken / bauen:
+# oder alles typechecken / bauen:
 npm run typecheck
 npm run build
 ```
 
-Danach im omadia **Admin-UI → Store → Upload** die ZIP reinziehen.
+Danach im omadia **Admin-UI -> Store -> Upload** die ZIP reinziehen.
 
-> ℹ️ Aktuell ist der ZIP-Upload der **einzige** Weg, ein Plugin zu installieren —
-> zum Teilen reichst du die ZIP direkt weiter. Ein öffentlicher **omadia-Hub**,
-> auf dem du Plugins einmal einreichst und jeder Host sie holt, ist geplant; die
-> ZIP, die du heute baust, ist genau das, was er annehmen wird.
+> ℹ️ Zwei Wege, ein Plugin auszuliefern. Lade die ZIP im Admin-UI hoch, oder
+> veröffentliche sie im **omadia-Hub** unter [hub.omadia.ai](https://hub.omadia.ai)
+> und installiere sie von dort auf jedem Host. Die ZIP, die du hier baust, ist
+> genau das, was beide annehmen.
 
 ---
 
@@ -57,20 +64,17 @@ Danach im omadia **Admin-UI → Store → Upload** die ZIP reinziehen.
 
 ```
 dein Code (src/plugin.ts)
-        │   esbuild-Bundle  (host-bereitgestellte Peers bleiben external)
-        ▼
+        |   esbuild-Bundle  (host-bereitgestellte Peers bleiben external)
+        v
    dist/plugin.js  +  manifest.yaml  +  skills/  +  assets/
-        │   zip
-        ▼
-   out/<id>-<version>.zip  ──Upload──▶  omadia-Host
-                                          lädt dist/plugin.js
+        |   zip
+        v
+   out/<id>-<version>.zip  --Upload-->  omadia-Host
+                                          laedt dist/plugin.js
                                           ruft activate(ctx[, core]) auf
 ```
 
-Der Host validiert das Manifest, prüft die Permissions und ruft dein
-`activate` auf. Jeder externe Effekt (Secrets, Netzwerk, Dateisystem, Memory)
-kommt über `ctx` zu dir — exakt auf das beschränkt, was dein Manifest
-deklariert.
+Der Host validiert das Manifest, prüft die Permissions und ruft dein `activate` auf. Jeder externe Effekt (Secrets, Netzwerk, Dateisystem, Memory) kommt über `ctx` zu dir, beschränkt auf das, was dein Manifest deklariert.
 
 ---
 
@@ -78,27 +82,21 @@ deklariert.
 
 ```
 omadia-plugin-starter/
-├── README.md / README.de.md     ← du bist hier
-├── docs/en/ · docs/de/          ← vollständige Guides (zweisprachig)
-├── scripts/build-zip.mjs        ← der esbuild→zip-Build (von den Beispielen geteilt)
-├── tsconfig.base.json           ← geteilte Compiler-Konfig
-├── types/                       ← lokale SDK-Typ-Stubs (offline kompilieren)
+├── README.md / README.de.md     <- du bist hier
+├── docs/en/ · docs/de/          <- vollständige Guides (zweisprachig)
+├── scripts/build-zip.mjs        <- der esbuild->zip-Build (von den Beispielen geteilt)
+├── tsconfig.base.json           <- geteilte Compiler-Konfig
+├── types/                       <- lokale SDK-Typ-Stubs (offline kompilieren)
 │   ├── omadia-plugin-api.d.ts
 │   └── omadia-channel-sdk.d.ts
 └── examples/
-    ├── agent-plugin/            ← @acme/agent-hello
-    └── channel/                 ← @acme/channel-webhook
+    ├── agent-plugin/            <- @acme/agent-hello
+    └── channel/                 <- @acme/channel-webhook
 ```
 
 ### Zu den SDK-Typ-Stubs
 
-`@omadia/plugin-api` und `@omadia/channel-sdk` werden **vom omadia-Host zur
-Laufzeit bereitgestellt** — sie liegen nicht auf npm, du installierst und
-bundlest sie also nicht. Damit dein Plugin trotzdem offline typecheckt, liefert
-dieses Repo originalgetreue Typ-Stubs in [`types/`](./types). Der Build markiert
-die echten Pakete als `external`, der Host liefert dann die echten
-Implementierungen. Halte die Stubs zu der omadia-Version aktuell, die du
-anvisierst.
+`@omadia/plugin-api` und `@omadia/channel-sdk` werden **vom omadia-Host zur Laufzeit bereitgestellt**. Sie liegen nicht auf npm, du installierst und bundlest sie also nicht. Damit dein Plugin trotzdem offline typecheckt, liefert dieses Repo originalgetreue Typ-Stubs in [`types/`](./types). Der Build markiert die echten Pakete als `external`, der Host liefert dann die echten Implementierungen. Halte die Stubs zu der omadia-Version aktuell, die du anvisierst.
 
 ---
 
@@ -115,5 +113,4 @@ anvisierst.
 
 ## Lizenz
 
-[MIT](./LICENSE) — fork es, ship es, verkauf es. Ersetz die `@acme/*`-Platzhalter
-und den `authors`-Block durch deine eigenen, bevor du veröffentlichst.
+[MIT](./LICENSE). Fork es, ship es, verkauf es. Ersetz die `@acme/*`-Platzhalter und den `authors`-Block durch deine eigenen, bevor du veröffentlichst.
