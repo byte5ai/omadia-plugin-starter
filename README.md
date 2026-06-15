@@ -2,7 +2,7 @@
 
 # omadia plugin starter
 
-### Build your own [omadia](https://omadia.ai) plugin or channel — and package it into an uploadable ZIP with one command.
+### Build your own [omadia](https://omadia.ai) plugin or channel, and package it into an uploadable ZIP with one command.
 
 A ready-to-fork template with two working examples and a build script that turns
 your code into the ZIP the omadia admin UI accepts. Clone it, fill in your logic,
@@ -12,9 +12,9 @@ ship it.
 [![Built for omadia](https://img.shields.io/badge/built%20for-omadia-2496ED.svg)](https://github.com/byte5ai/omadia)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-[**Main repo**](https://github.com/byte5ai/omadia) · [**Website**](https://omadia.ai) · [**Quickstart**](#quickstart) · [**Docs**](#documentation)
+[**Main repo**](https://github.com/byte5ai/omadia) · [**Website**](https://omadia.ai) · [**Plugin hub**](https://hub.omadia.ai) · [**Quickstart**](#quickstart) · [**Docs**](#documentation)
 
-> 🇩🇪 Diese Anleitung gibt es auch [auf Deutsch](./README.de.md).
+🇩🇪 Diese Anleitung gibt es auch [auf Deutsch](./README.de.md).
 
 </div>
 
@@ -33,7 +33,7 @@ your code into the ZIP the omadia admin UI accepts.
 | --- | --- | --- | --- |
 | **Agent** | A skill with tools the orchestrator can call. | `activate(ctx)` | [`examples/agent-plugin`](./examples/agent-plugin) |
 | **Channel** | A surface (Discord, Slack, a webhook…) that routes user messages in and replies back out. | `activate(ctx, core)` | [`examples/channel`](./examples/channel) |
-| **Integration** | A connector that exposes an external system as tools/services. | `activate(ctx)` | see the agent example — same shape |
+| **Integration** | A connector that exposes an external system as tools/services. | `activate(ctx)` | see the agent example, same shape |
 
 All three share one contract: export an `async activate(...)` that returns a
 handle with `close()`. The difference is what they declare in `manifest.yaml`
@@ -60,10 +60,9 @@ npm run build
 
 Then open the omadia **admin UI → Store → Upload** and drop the ZIP in.
 
-> ℹ️ Today, ZIP upload is the **only** way to install a plugin — share it by
-> handing the ZIP over directly. A public **omadia Hub** for submitting plugins
-> once and having any host fetch them is planned; the ZIP you build now is
-> exactly what it will accept.
+> ℹ️ Two ways to ship a plugin. Upload the ZIP in the admin UI, or publish it to
+> the **omadia hub** at [hub.omadia.ai](https://hub.omadia.ai) and install it
+> from there on any host. The ZIP you build here is exactly what both accept.
 
 ---
 
@@ -106,7 +105,7 @@ omadia-plugin-starter/
 ### About the SDK type stubs
 
 `@omadia/plugin-api` and `@omadia/channel-sdk` are **provided by the omadia
-host at runtime** — they are not published to npm, so you neither install nor
+host at runtime**. They are not published to npm, so you neither install nor
 bundle them. To let your plugin typecheck offline, this repo ships faithful
 type stubs in [`types/`](./types). The build marks the real packages as
 `external`, so the host supplies the genuine implementations. Keep the stubs in
@@ -127,5 +126,5 @@ sync with the omadia version you target.
 
 ## License
 
-[MIT](./LICENSE) — fork it, ship it, sell it. Replace the `@acme/*`
+[MIT](./LICENSE). Fork it, ship it, sell it. Replace the `@acme/*`
 placeholders and the `authors` block with your own before you publish.
