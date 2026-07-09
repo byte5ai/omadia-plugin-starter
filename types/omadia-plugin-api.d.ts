@@ -1,6 +1,6 @@
 /**
  * Local type stubs for `@omadia/plugin-api`.
- * Last synced against byte5ai/omadia @ 744af1386cd782c7e46fe3679e9f270c0c5f8d0e (2026-07-06).
+ * Last synced against byte5ai/omadia @ 327ddf89250eb36a5e0b1965dafc82139a40d4c6 (2026-07-08).
  *
  * The real package is provided by the Omadia host at runtime — it is NOT
  * published to npm, so you do not (and cannot) `npm install` it. These ambient
@@ -968,6 +968,41 @@ declare module '@omadia/plugin-api' {
      *  refresh token never reaches plugin code. Guard with `if (ctx.oauthTokens)`
      *  — a Hub plugin may land on an older core without the broker. */
     readonly oauthTokens?: OAuthTokensAccessor;
+
+    /** Epic #459 W5 (issue #458) — host-pooled MCP tool access. Present iff the
+     *  manifest declares `permissions.mcp` AND the host wires an MCP service.
+     *  Scoped to servers the operator has EXPLICITLY granted to this plugin —
+     *  never ambient access to every registered server. Calls route through
+     *  the host's shared connection pool, the scan-verdict dispatch guard, and
+     *  the call audit log (attributed to this plugin). Guard with
+     *  `if (ctx.mcp)` — a Hub plugin may land on an older core that lacks it. */
+    readonly mcp?: McpAccessor;
+  }
+
+  /** One discovered MCP tool, as the host's manager reports it (issue #458). */
+  export interface McpAccessorToolDescriptor {
+    readonly name: string;
+    readonly description?: string;
+    readonly inputSchema?: Record<string, unknown>;
+  }
+
+  /**
+   * Host-pooled MCP access for plugins (epic #459 W5, issue #458). Server ids
+   * are the host's `mcp_servers` ids; only operator-granted servers resolve —
+   * everything else throws `McpServerNotGrantedError`-shaped errors as plain
+   * `Error` (plugin-api stays dependency-free). `callTool` mirrors the host
+   * manager's contract: it never throws on tool failure, it returns an
+   * `Error: …` string (including scan-policy denials).
+   */
+  export interface McpAccessor {
+    /** Server ids the operator has granted to this plugin. */
+    listServers(): Promise<readonly string[]>;
+    listTools(serverId: string): Promise<readonly McpAccessorToolDescriptor[]>;
+    callTool(
+      serverId: string,
+      toolName: string,
+      args: Record<string, unknown>,
+    ): Promise<string>;
   }
 
   // ──────────────────────────────────────────────────────────────────────

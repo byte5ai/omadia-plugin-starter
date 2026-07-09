@@ -1,6 +1,6 @@
 /**
  * Local type stubs for `@omadia/channel-sdk`.
- * Last synced against byte5ai/omadia @ 744af1386cd782c7e46fe3679e9f270c0c5f8d0e (2026-07-06).
+ * Last synced against byte5ai/omadia @ 327ddf89250eb36a5e0b1965dafc82139a40d4c6 (2026-07-08).
  *
  * Like `@omadia/plugin-api`, this package is provided by the Omadia host at
  * runtime and is not on npm. These declarations let a channel compile offline.
@@ -315,6 +315,15 @@ declare module '@omadia/channel-sdk' {
          * The orchestrator cannot suppress or reword it.
          */
         delegatedAnswer?: DelegatedAnswer;
+        /**
+         * #332 Layer 1 (gap-closure) — curated, tamper-evident projection of
+         * `runTrace.agentInvocations`, identical in shape and derivation to
+         * `SemanticAnswer.agentsConsulted` (see `deriveAgentsConsulted` in
+         * `toSemanticAnswer.ts`). Streaming clients (web-ui) previously had to
+         * either re-derive this from the raw `runTrace` or go without; this
+         * field gives every channel the SAME harness-built array.
+         */
+        agentsConsulted?: AgentConsultation[];
       }
     /**
      * Emitted after `done` by the verifier wrapper (only when enabled). The
@@ -1138,6 +1147,11 @@ declare module '@omadia/channel-sdk' {
     /** 0-based index across the Run. */
     index: number;
     agentName: string;
+    /** Stable agent id when resolvable (e.g. `de.byte5.agent.strategist`). Lets
+     *  consumers disambiguate invocations whose human-facing label collides
+     *  (#332 gap-closure). Absent when the invoked tool has no registered
+     *  agentId (native/kernel tools). */
+    agentId?: string;
     durationMs: number;
     subIterations: number;
     status: RunStatus;
@@ -1361,6 +1375,15 @@ declare module '@omadia/channel-sdk' {
   export function agentsConsultedFooterText(
     answer: Pick<SemanticAnswer, 'agentsConsulted'>,
   ): string | undefined;
+
+  /**
+   * #332 Layer 1 (gap-closure) — shared derivation so streaming clients
+   * (web-ui) and non-streaming `toSemanticAnswer` callers (Teams et al.) build
+   * the IDENTICAL curated agentsConsulted array from the same run-trace.
+   */
+  export function deriveAgentsConsulted(
+    runTrace: Pick<RunTracePayload, 'agentInvocations'> | undefined,
+  ): AgentConsultation[] | undefined;
 
   /**
    * Convert the internal kernel-shaped `ChatTurnResult` to the channel-agnostic

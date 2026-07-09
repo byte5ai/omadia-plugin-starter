@@ -93,6 +93,7 @@ permissions:                   # least-privilege; omitted = denied
     max_tokens_per_call: 1024            # default 4096
   flows: false                           # true → Conductor flow toolkit
   events: { emit: false }                # true → ctx.events.emit declared events
+  mcp: false                             # true, or { servers_hint: [...] } → ctx.mcp
 
 # ── agents only ────────────────────────────────────────────────────────────
 capabilities:                  # the tools the orchestrator can call
@@ -171,6 +172,15 @@ field only when you use the capability it gates.
 - **`permissions.flows: true`** — unlocks the Conductor flow toolkit.
 - **`permissions.events.emit: true`** — lets the plugin emit declared domain
   events via `ctx.events.emit`.
+- **`permissions.mcp: true`** (or `{ servers_hint: [...] }`) — unlocks
+  `ctx.mcp`, host-pooled access to MCP tool servers. Only servers the operator
+  has *explicitly granted to this plugin* in the Control Center resolve —
+  there is no ambient access to every registered server. Calls route through
+  the host's shared connection pool, the scan-verdict dispatch guard, and a
+  per-plugin call audit log. `servers_hint` is an optional list of server ids
+  the plugin expects, purely informational for the operator's grant UI — it
+  does not itself grant access. Guard with `if (ctx.mcp)`: a Hub plugin may
+  land on an older core that lacks this accessor entirely.
 - **`permissions.network.web_scanner` / `audit_mode`** — opt into the web-scanner
   surface; `audit_mode` is `single-host | allowlist | public-web`.
 - **`oauth_providers`** *(integrations)* — inert OAuth descriptors the host's
