@@ -32,9 +32,20 @@ export async function activate(ctx: PluginContext, core: CoreApi): Promise<Chann
 
 ## Inbound: native event → turn
 
-Whatever the transport, you build an `IncomingTurn` and hand it to the core:
+Whatever the transport, you build an `IncomingTurn` and hand it to the core.
+`handleTurnStream` yields a **discriminated union** — branch on `event.type`,
+accumulate `text_delta` chunks, and take the authoritative answer from the
+terminal `done` event:
 
 ```ts
+import {
+  NO_REPLY_SENTINEL,
+  isNoReply,
+  type ChannelHandle,
+  type CoreApi,
+  type IncomingTurn,
+} from '@omadia/channel-sdk';
+
 const turn: IncomingTurn = {
   channelId: ctx.agentId,
   conversationId: body.conversationId ?? 'default',
@@ -42,15 +53,66 @@ const turn: IncomingTurn = {
   userRef: { kind: 'custom', id: body.userId ?? 'anonymous' },
 };
 
-let reply = '';
+let streamed = '';
+let finalAnswer: string | null = null;
 for await (const event of core.handleTurnStream(turn)) {
-  if (typeof event.text === 'string') reply += event.text;   // accumulate deltas
+  switch (event.type) {
+    case 'text_delta': streamed += event.text; break;      // incremental
+    case 'done':       finalAnswer = event.answer; break;  // authoritative
+    case 'error':      throw new Error(event.message);
+    default:           break;                              // tool_use, surface_*, …
+  }
 }
+const answer = (finalAnswer ?? streamed).trim();
 ```
 
-`ChatStreamEvent` is a stream of incremental + terminal events. The example
-just concatenates text; a richer adapter inspects the event types to stream
-typing indicators and render the terminal answer as native cards.
+A richer adapter also inspects `tool_use` / `heartbeat` to stream typing
+indicators and renders the terminal answer as native cards. Never index
+`event.text` on the bare union — only the `text_delta` arm has it; the `switch`
+is what narrows each arm safely.
+
+### Drop deliberate non-answers (`NO_REPLY`)
+
+An orchestrator can decide a turn deserves **no** user-visible reply — a
+group-chat message not addressed to the bot, a silent acknowledgement. It
+signals that with `NO_REPLY_SENTINEL` (the literal string `"NO_REPLY"`). A
+channel **MUST drop** it rather than forward the sentinel to the user:
+
+```ts
+if (answer === NO_REPLY_SENTINEL || isNoReply({ text: answer })) {
+  core.log('info', 'dropping no-reply turn', { conversationId: turn.conversationId });
+  return; // send nothing to the user (e.g. respond HTTP 204)
+}
+res.json({ reply: answer });
+```
+
+Use `isNoReply(...)` rather than a bare string compare: it matches both the
+strict `NO_REPLY` answer **and** the trailing-line "I won't reply because…"
+anti-pattern, while ignoring an innocent `NO_REPLY` substring inside a real
+answer.
+
+### Route the turn to the bound Agent (`channelType` / `channelKey`)
+
+`IncomingTurn` carries optional `channelType` and `channelKey`. A
+**single-tenant** channel may leave them unset and drive the shared orchestrator
+via `core.handleTurnStream` (what the example does). A **direct-agent /
+multi-tenant** channel — where the operator binds several Agents to distinct
+`(channelType, channelKey)` routes — **MUST set both** and resolve the bound
+Agent **per turn**:
+
+```ts
+import { resolveChatAgentForChannel } from '@omadia/channel-sdk';
+
+// channelType is constant for the plugin; channelKey is the conversation the
+// operator bound in the dashboard.
+const agent = resolveChatAgentForChannel(ctx, 'teams', conversationId);
+if (!agent) throw new Error('orchestrator unavailable');
+const semantic = await agent.chat({ userMessage: turn.text /* …, sessionScope, userId */ });
+```
+
+Resolve it on **every** turn — caching `getChatAgent(ctx)` once at `activate()`
+defeats per-binding routing and hot config reloads, which is the whole point of
+the seam.
 
 ## Two transport shapes
 

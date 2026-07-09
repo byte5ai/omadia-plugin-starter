@@ -1,6 +1,12 @@
 import express from 'express';
 import type { PluginContext } from '@omadia/plugin-api';
-import type { ChannelHandle, CoreApi, IncomingTurn } from '@omadia/channel-sdk';
+import {
+  NO_REPLY_SENTINEL,
+  isNoReply,
+  type ChannelHandle,
+  type CoreApi,
+  type IncomingTurn,
+} from '@omadia/channel-sdk';
 
 import { createAdminRouter } from './adminRouter.js';
 
@@ -40,6 +46,13 @@ export async function activate(ctx: PluginContext, core: CoreApi): Promise<Chann
       }
 
       // Translate the native payload into the core, channel-agnostic turn.
+      //
+      // NOTE: this single-tenant example drives the shared orchestrator via
+      // `core.handleTurnStream`. A real multi-tenant / direct-agent channel —
+      // one where the operator binds several Agents to distinct routes — MUST
+      // set `channelType` + `channelKey` here and resolve the bound agent per
+      // turn with `resolveChatAgentForChannel(ctx, channelType, channelKey)`
+      // instead of forwarding to the shared singleton.
       const turn: IncomingTurn = {
         channelId,
         conversationId: body.conversationId ?? 'default',
@@ -47,18 +60,48 @@ export async function activate(ctx: PluginContext, core: CoreApi): Promise<Chann
         userRef: { kind: 'custom', id: body.userId ?? 'anonymous' },
       };
 
-      // Drive an orchestrator turn and accumulate the textual reply. The full
-      // ChatStreamEvent union is defined by @omadia/channel-sdk; here we simply
-      // concatenate any text the events carry. A real adapter would also render
-      // cards/attachments for the platforms that support them.
-      let reply = '';
+      // Drive an orchestrator turn. `handleTurnStream` yields the full
+      // ChatStreamEvent union; branch on `event.type` to consume it. This
+      // minimal adapter accumulates `text_delta` chunks and prefers the
+      // authoritative `done.answer`. A richer channel would also render tool
+      // traces, cards, attachments and canvas `surface_*` events for the
+      // platforms that support them.
+      let streamed = '';
+      let finalAnswer: string | null = null;
       for await (const event of core.handleTurnStream(turn)) {
-        if (typeof event.text === 'string') reply += event.text;
+        switch (event.type) {
+          case 'text_delta':
+            streamed += event.text;
+            break;
+          case 'done':
+            finalAnswer = event.answer;
+            break;
+          case 'error':
+            throw new Error(event.message);
+          default:
+            // tool_use / heartbeat / surface_* / … — ignored by this text-only
+            // adapter.
+            break;
+        }
       }
+
+      // Prefer the authoritative final answer; fall back to concatenated deltas.
+      const answer = (finalAnswer ?? streamed).trim();
 
       lastDeliveryAt = new Date().toISOString();
       lastError = null;
-      res.json({ reply });
+
+      // Drop deliberate no-reply turns instead of forwarding the sentinel to the
+      // user. `isNoReply` matches both the strict `NO_REPLY` answer and the
+      // trailing-line "I won't reply because…" anti-pattern; the strict compare
+      // against `NO_REPLY_SENTINEL` short-circuits the common case.
+      if (answer === NO_REPLY_SENTINEL || isNoReply({ text: answer })) {
+        core.log('info', 'dropping no-reply turn', { conversationId: turn.conversationId });
+        res.status(204).end();
+        return;
+      }
+
+      res.json({ reply: answer });
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
       core.log('error', 'webhook delivery failed', { error: lastError });
