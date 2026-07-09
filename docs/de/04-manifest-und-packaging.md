@@ -29,6 +29,17 @@ compat:
 depends_on: []                 # andere Plugin-Ids, die zuerst aktivieren müssen
                                # (z. B. "@omadia/memory", wenn du ctx.memory nutzt)
 
+provides: []                   # Capability-Ids, die dieses Plugin anderen anbietet
+requires: []                   # Capability-Ids, die von einem aktiven Plugin
+                               # bereitgestellt sein MÜSSEN — harter Fehler bei
+                               # der Aktivierung, wenn nicht
+
+multi_instance: true           # false → nur eine Installation erlaubt; wenn false…
+multi_instance_justification: "" #   …ist hier ein nicht-leerer Grund PFLICHT
+privacy_class: "default"       # "default" | "strict" (strengere PII-Behandlung)
+is_reference_only: true        # OB-29-0: aus dem Store ausblenden; nur
+                               # Builder-Pattern-Quelle. Für echte Plugins weglassen/false.
+
 lifecycle:
   entry: "dist/plugin.js"      # erforderlich; das Modul, das activate(...) exportiert
   hooks:                       # optional; alle boolean, Default false
@@ -56,13 +67,34 @@ setup:
       required: true
       # typ-spezifische Extras: default, placeholder, pattern, enum:[…],
       # provider/scopes (oauth)
+      # options_provider: "list_things"  # Capability-Id liefert dynamisches Enum
+      # multi: true                       # mehrere ausgewählte Werte erlauben
   self_test: true              # nach Installation einmal aktivieren zum Prüfen
 
 permissions:                   # Least-Privilege; weggelassen = verweigert
   memory:  { reads: [], writes: [] }     # Namespace-Globs, z. B. "agent:@you/x:*"
-  graph:   { reads: [], writes: [] }
-  network: { outbound: [] }              # Host-Globs; nicht leer → ctx.http existiert
+  graph:
+    reads:  []                           # Node-Labels, z. B. "Turn", "Person"
+    writes: []
+    entity_systems: []                   # plugin-eigene KG-Namespaces, akzeptiert von
+                                         # ctx.knowledgeGraph.ingestEntities;
+                                         # "odoo"/"confluence" reserviert (gestrippt)
+  network:
+    outbound: []                         # Host-Globs; nicht leer → ctx.http existiert
+    web_scanner: false                   # true → ctx Web-Scanner-Oberfläche
+    audit_mode: "single-host"            # single-host | allowlist | public-web
   filesystem: { scratch: false }         # true → ctx.scratch-Verzeichnis
+  secrets: { runtime_write: false }      # true → ctx.secrets darf zur Laufzeit schreiben
+  subAgents:                             # gated ctx.subAgent.ask (sonst wirft es)
+    calls: []                            # erlaubte Sub-Agent-Ids; weggelassen = verweigert
+    calls_per_invocation: 5              # Budget pro Handler-Aufruf (Default 5)
+  llm:                                   # gated ctx.llm.complete (sonst wirft es)
+    models_allowed: []                   # Modell-Globs, z. B. "claude-haiku-4-5*"
+    calls_per_invocation: 2              # Default 5
+    max_tokens_per_call: 1024            # Default 4096
+  flows: false                           # true → Conductor-Flow-Toolkit
+  events: { emit: false }                # true → ctx.events.emit deklarierter Events
+  mcp: false                             # true, oder { servers_hint: [...] } → ctx.mcp
 
 # ── nur Agents ─────────────────────────────────────────────────────────────
 capabilities:                  # die Tools, die der Orchestrator aufrufen kann
@@ -83,6 +115,25 @@ playbook:                      # Routing-Hinweise in natürlicher Sprache
 skills:                        # gebundelte Prompt-Partials / Schemas / Daten
   - { id: "sys", kind: "prompt_partial", path: "skills/system.md", shareable: false }
 
+jobs:                          # geplante Background-Jobs (cron); braucht den Host-
+  - name: "weekly-digest"      #   Scheduler. Gated auch ctx.jobs.register.
+    schedule: { cron: "0 8 * * MON" }
+    timeoutMs: 30000
+    overlap: skip              # skip | queue | allow
+
+# ── nur Integrationen ──────────────────────────────────────────────────────
+oauth_providers:               # kernel-vermittelte OAuth-Deskriptoren (inerte
+  - id: "acme"                 #   Daten; die Host-Engine führt den Flow aus, nicht dein Code)
+    authorize_url: "https://acme.example/oauth/authorize"
+    token_url: "https://acme.example/oauth/token"
+    client_id_field: "acme_client_id"       # setup.fields-Key mit der Id
+    client_secret_field: "acme_client_secret"
+    token_auth_style: "body_form"           # body_form | body_json | basic
+    pkce: true                              # Default true
+service_types:                 # eine ctx.services.provide-Oberfläche auf einen TS-Typ mappen
+  - service: "acme.client"
+    type: { from: "@acme/integration-acme", name: "AcmeClient" }
+
 # ── nur Channels (Schema-Abschnitt 14) ─────────────────────────────────────
 admin_ui_path: "/api/your-channel/admin/index.html"   # optionale iframe-Oberfläche
 channel:
@@ -97,6 +148,62 @@ channel:
 
 > Agents deklarieren `capabilities` + `playbook`; Channels deklarieren
 > stattdessen den `channel`-Block. Nicht mischen.
+
+### Erweiterte Felder
+
+Alles unten ist **optional** und defaultet auf den sicheren/Aus-Wert — deklarier
+ein Feld nur, wenn du die Capability nutzt, die es gated.
+
+- **`provides` / `requires`** — Capability-Ids (Freitext-Strings), die ein
+  Plugin anbietet oder braucht. Ein `requires` ohne aktiven Provider ist ein
+  **harter Fehler bei der Aktivierung** — deklarier also nur, was du wirklich
+  brauchst.
+- **`jobs`** — cron-geplante Background-Arbeit (`{ name, schedule.cron,
+  timeoutMs, overlap }`, `overlap: skip | queue | allow`). Braucht den
+  Host-Scheduler; derselbe Check gated das programmatische `ctx.jobs.register`.
+- **`permissions.subAgents`** — `{ calls: [ids], calls_per_invocation }`
+  (Budget-Default 5). Ohne das wirft `ctx.subAgent.ask` `SubAgentPermissionDenied`.
+- **`permissions.llm`** — `{ models_allowed: [globs], calls_per_invocation (Def
+  5), max_tokens_per_call (Def 4096) }`. Gated `ctx.llm.complete`; ein Modell
+  außerhalb der Liste wirft `LlmModelNotAllowed`.
+- **`permissions.graph.entity_systems`** — plugin-eigene KG-Namespaces,
+  akzeptiert von `ctx.knowledgeGraph.ingestEntities`. `odoo` / `confluence`
+  sind host-reserviert und werden stillschweigend gestrippt.
+- **`permissions.secrets.runtime_write: true`** — erlaubt dem Plugin, Vault-
+  Secrets zur Laufzeit zu schreiben (`ctx.secrets.set`), nicht nur
+  Install-Zeit-Felder zu lesen.
+- **`permissions.flows: true`** — schaltet das Conductor-Flow-Toolkit frei.
+- **`permissions.events.emit: true`** — erlaubt dem Plugin, deklarierte
+  Domain-Events über `ctx.events.emit` zu senden.
+- **`permissions.mcp: true`** (oder `{ servers_hint: [...] }`) — schaltet
+  `ctx.mcp` frei, host-gepoolten Zugriff auf MCP-Tool-Server. Nur Server, die
+  der Operator *explizit für dieses Plugin* im Control Center freigegeben hat,
+  lösen auf — kein ambienter Zugriff auf jeden registrierten Server. Calls
+  laufen durch den geteilten Connection-Pool des Hosts, das
+  Scan-Verdict-Dispatch-Gate und ein Per-Plugin-Call-Audit-Log.
+  `servers_hint` ist eine optionale Liste erwarteter Server-Ids, rein
+  informativ für die Grant-UI des Operators — sie gewährt selbst keinen
+  Zugriff. Mit `if (ctx.mcp)` gaten: ein Hub-Plugin kann auf einem älteren
+  Core landen, dem dieser Accessor komplett fehlt.
+- **`permissions.network.web_scanner` / `audit_mode`** — die Web-Scanner-
+  Oberfläche freischalten; `audit_mode` ist `single-host | allowlist | public-web`.
+- **`oauth_providers`** *(Integrationen)* — inerte OAuth-Deskriptoren, die der
+  Broker des Hosts ausführt. Jeder braucht `id`, `authorize_url`, `token_url`,
+  `client_id_field`, `client_secret_field` und einen `token_auth_style` von
+  `body_form | body_json | basic`; fehlerhafte Einträge werden verworfen.
+- **`service_types`** *(Integrationen)* — eine `ctx.services.provide(...)`-
+  Oberfläche auf den TypeScript-Typ mappen, den ein Konsument importiert:
+  `{ service, type: { from, name } }`.
+- **`multi_instance`** — defaultet `true`; setz `false` für Singletons, dann
+  ist eine nicht-leere `multi_instance_justification` **erforderlich**.
+- **`privacy_class`** — `default` oder `strict` (strengere PII-Behandlung);
+  alles andere fällt auf `default` zurück.
+- **`is_reference_only: true`** — blendet das Plugin aus dem Operator-Store
+  aus und markiert es als Builder-Pattern-Quelle. Für echte Plugins weglassen
+  (oder `false`).
+- **Setup-Field-Extras** — `options_provider: "<capability_id>"` liefert das
+  Enum eines Feldes dynamisch nach der Installation; `multi: true` erlaubt
+  mehrere ausgewählte Werte.
 
 ### `setup.guide` — Anleitung für das Drittsystem
 
