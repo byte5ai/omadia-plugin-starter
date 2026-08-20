@@ -1,0 +1,120 @@
+name: SDK drift check
+
+# #468 — the ambient stubs in types/omadia-plugin-api.d.ts and
+# types/omadia-channel-sdk.d.ts are hand-maintained stand-ins for
+# @omadia/plugin-api and @omadia/channel-sdk (packages the Omadia host
+# injects at runtime and never publishes to npm). The only sync mechanism
+# before this workflow was a human occasionally reading the real source.
+#
+# Runs weekly (byte5ai/omadia releases far more often than that — checking
+# on every release would be noisy for a check whose whole premise is "drift
+# is expected, not urgent") and on demand. Drift is reported as a GitHub
+# issue, never as a red run: an out-of-sync stub is not a broken build.
+#
+# The `scripts/**` trigger below additionally runs the wiring/mutation test
+# suite for the detector itself on every PR that touches it, so a change to
+# the detection logic can't silently stop detecting anything.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1' # Monday 06:17 UTC
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - 'scripts/lib/sdk-drift.mjs'
+      - 'scripts/lib/sdk-drift.test.mjs'
+      - 'scripts/check-sdk-drift.mjs'
+      - 'types/omadia-plugin-api.d.ts'
+      - 'types/omadia-channel-sdk.d.ts'
+      - '.github/workflows/sdk-drift-check.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  unit-tests:
+    name: drift-detector unit + mutation tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+      - run: npm ci
+      - run: node --test scripts/lib/sdk-drift.test.mjs
+
+  check-drift:
+    name: compare stubs against byte5ai/omadia
+    # Skip on PRs — this job needs the real omadia checkout + build, which is
+    # the expensive, non-deterministic-timing part; PRs only need the fast
+    # unit-tests job above to gate detector changes themselves.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout omadia-plugin-starter
+        uses: actions/checkout@v4
+        with:
+          path: starter
+
+      - name: Checkout byte5ai/omadia
+        uses: actions/checkout@v4
+        with:
+          repository: byte5ai/omadia
+          path: omadia
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: 'starter/.nvmrc'
+
+      - name: Resolve omadia ref
+        id: ref
+        run: |
+          cd omadia
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Install + build the two SDK packages
+        run: |
+          cd omadia/middleware
+          npm ci
+          npm run build -w @omadia/plugin-api -w @omadia/channel-sdk
+
+      - name: Install starter deps
+        run: |
+          cd starter
+          npm ci
+
+      - name: Run drift check
+        id: drift
+        working-directory: starter
+        run: |
+          set +e
+          node scripts/check-sdk-drift.mjs \
+            --omadia-dir "$GITHUB_WORKSPACE/omadia" \
+            --ref "${{ steps.ref.outputs.sha }}" \
+            --report drift-report.json
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          # 1 = setup/script error (checkout or build broke — a real CI
+          # failure). 0 or 2 are both a completed check; only 1 fails the job.
+          if [ "$code" = "1" ]; then
+            exit 1
+          fi
+          exit 0
+
+      - name: Upload full drift report
+        if: steps.drift.outputs.exit_code == '2'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-drift-report
+          path: starter/drift-report.json
+          retention-days: 90
+
+      - name: Open or update drift issue
+        if: steps.drift.outputs.exit_code == '2'
+        working-directory: starter
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/report-sdk-drift.mjs --report drift-report.json --repo "${{ github.repository }}" --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
