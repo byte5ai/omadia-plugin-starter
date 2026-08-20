@@ -23,6 +23,9 @@
  * spread across.
  */
 
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+
 import ts from 'typescript';
 
 /** Compiler options shared by both extraction paths. `skipLibCheck` because
@@ -144,4 +147,102 @@ export function diffExports(real, stub) {
 
 export function hasDrift(diff) {
   return diff.missing.length > 0 || diff.stale.length > 0 || diff.changed.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Missing-scope: the stub IS the curation (#468 follow-up)
+// ---------------------------------------------------------------------------
+//
+// The first real run against byte5ai/omadia found 324 "missing" exports in
+// @omadia/plugin-api alone — because that package exports entire internal
+// domains (knowledge graph, nudges, bulk promotion, ...) alongside the actual
+// plugin-authoring contract. The stub was hand-written to cover what a plugin
+// AUTHOR compiles against, so "real has it, stub does not" is, for most of
+// that surface, a scope difference by construction — not drift.
+//
+// The fix is NOT a second hand-maintained allowlist (a curation list that
+// itself drifts is the exact disease this tool treats). The relevance source
+// is the repo itself:
+//
+//   - every named import from the SDK modules in `examples/**/*.ts` — if a
+//     template imports it, authors copy it;
+//   - every backticked identifier in `docs/**/*.md` that names a real export —
+//     if the docs tell authors about it, its absence from the stub misleads.
+//
+// `stale` and `changed` stay unscoped on purpose: they are inherently limited
+// to the stub's own surface and are the classes that BREAK authors.
+
+/**
+ * Named bindings imported from `moduleName` across every `.ts` file under
+ * `dirs`, plus backticked identifiers in every `.md` under `dirs` that name a
+ * real export (`realNames`). Returns a Set of symbol names.
+ *
+ * Import parsing is line-based on purpose — the examples are small template
+ * files, and a full program parse would need module resolution for files whose
+ * imports (the SDK itself) deliberately do not resolve outside the host.
+ */
+export function collectReferencedSymbols(dirs, moduleName, realNames) {
+  const referenced = new Set();
+  const importRe = new RegExp(
+    String.raw`import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]` +
+      moduleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+      String.raw`['"]`,
+    'g',
+  );
+  for (const dir of dirs) {
+    for (const file of walkFiles(dir)) {
+      if (file.endsWith('.ts')) {
+        const text = readFileSync(file, 'utf8');
+        // Multi-line import clauses: normalise whitespace first so the
+        // line-based regex sees `import {\n  A,\n  B,\n} from '...'` whole.
+        const flat = text.replace(/\s+/g, ' ');
+        for (const m of flat.matchAll(importRe)) {
+          for (const raw of m[1].split(',')) {
+            // `Foo as Bar` references Foo; `type Foo` references Foo.
+            const name = raw.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0].trim();
+            if (name !== '') referenced.add(name);
+          }
+        }
+      } else if (file.endsWith('.md')) {
+        const text = readFileSync(file, 'utf8');
+        for (const m of text.matchAll(/`([A-Za-z_$][A-Za-z0-9_$]*)`/g)) {
+          if (realNames.has(m[1])) referenced.add(m[1]);
+        }
+      }
+    }
+  }
+  return referenced;
+}
+
+function walkFiles(dir) {
+  if (!existsSync(dir)) return [];
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walkFiles(full));
+    else out.push(full);
+  }
+  return out;
+}
+
+/**
+ * Splits a diff's `missing` list by relevance. Itemized `missing` shrinks to
+ * the referenced names; everything else becomes a COUNT (`missingOutOfScope`),
+ * still visible but never the thing that opens or floods an issue. `stale` and
+ * `changed` pass through untouched.
+ */
+export function scopeMissing(diff, referenced) {
+  const missing = diff.missing.filter((n) => referenced.has(n));
+  return {
+    missing,
+    missingOutOfScope: diff.missing.length - missing.length,
+    stale: diff.stale,
+    changed: diff.changed,
+  };
+}
+
+/** Drift that should open/refresh the weekly issue, post-scoping. */
+export function hasRelevantDrift(scoped) {
+  return scoped.missing.length > 0 || scoped.stale.length > 0 || scoped.changed.length > 0;
 }

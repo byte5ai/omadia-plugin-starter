@@ -49,8 +49,14 @@ function truncatedList(names) {
 function renderPackageSection(pkg) {
   const lines = [`### ${pkg.label}`, ''];
   lines.push(`Real exports: ${String(pkg.exportedByReal)} · stub exports: ${String(pkg.exportedByStub)}`, '');
-  lines.push(`**Missing from stub** (${String(pkg.missing.length)}) — the real SDK exports these, the stub does not:`);
+  lines.push(`**Missing from stub** (${String(pkg.missing.length)}) — referenced by this repo's examples/docs but absent from the stub:`);
   lines.push(truncatedList(pkg.missing), '');
+  if (pkg.missingOutOfScope > 0) {
+    lines.push(
+      `_${String(pkg.missingOutOfScope)} further real exports are absent from the stub but referenced nowhere in this repo — treated as scope difference, not drift (the stub is the curated authoring contract)._`,
+      '',
+    );
+  }
   lines.push(`**Stale in stub** (${String(pkg.stale.length)}) — the stub exports these, the real SDK no longer does:`);
   lines.push(truncatedList(pkg.stale), '');
   lines.push(`**Signature changed** (${String(pkg.changed.length)}) — same name, different shape (real call, since the normalizer can only rule out import-path noise, not tell a genuine reshape from an intentional stub simplification):`);

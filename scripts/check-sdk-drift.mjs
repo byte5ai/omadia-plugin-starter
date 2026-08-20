@@ -27,10 +27,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  collectReferencedSymbols,
   diffExports,
   extractAmbientModuleExports,
   extractRealModuleExports,
-  hasDrift,
+  hasRelevantDrift,
+  scopeMissing,
 } from './lib/sdk-drift.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -101,16 +103,28 @@ function main() {
 
     const real = extractRealModuleExports(realEntry);
     const stub = extractAmbientModuleExports(pkg.stubPath, pkg.ambientModuleName);
-    const diff = diffExports(real, stub);
-    const drift = hasDrift(diff);
+    // The stub is the curated authoring contract, so raw `missing` over the
+    // full export surface is scope difference, not drift (the first real run
+    // found 324 of them in plugin-api alone). Itemize only the missing
+    // symbols this repo's own examples/docs actually reference; the rest is
+    // reported as a count. `stale`/`changed` stay unscoped — they break
+    // authors regardless.
+    const referenced = collectReferencedSymbols(
+      [path.join(REPO_ROOT, 'examples'), path.join(REPO_ROOT, 'docs')],
+      pkg.ambientModuleName,
+      new Set(real.keys()),
+    );
+    const scoped = scopeMissing(diffExports(real, stub), referenced);
+    const drift = hasRelevantDrift(scoped);
     anyDrift = anyDrift || drift;
 
     results[pkg.key] = {
       label: pkg.label,
       exportedByReal: real.size,
       exportedByStub: stub.size,
+      referencedByRepo: referenced.size,
       hasDrift: drift,
-      ...diff,
+      ...scoped,
     };
   }
 
@@ -133,7 +147,10 @@ function main() {
     if (!r.hasDrift) continue;
     console.log(`\n${r.label}:`);
     if (r.missing.length) {
-      console.log(`  missing from stub (real exports these, stub does not): ${r.missing.join(', ')}`);
+      console.log(`  missing from stub (referenced by examples/docs, absent from stub): ${r.missing.join(', ')}`);
+    }
+    if (r.missingOutOfScope > 0) {
+      console.log(`  (${String(r.missingOutOfScope)} further real exports absent from the stub but referenced nowhere in this repo — scope difference, not drift)`);
     }
     if (r.stale.length) {
       console.log(`  stale in stub (stub exports these, real no longer does): ${r.stale.join(', ')}`);
