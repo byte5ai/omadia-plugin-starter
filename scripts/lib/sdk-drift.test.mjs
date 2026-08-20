@@ -10,12 +10,20 @@
  * only exercised by the scheduled CI workflow.
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { diffExports, extractAmbientModuleExports, extractRealModuleExports, hasDrift } from './sdk-drift.mjs';
+import {
+  collectReferencedSymbols,
+  diffExports,
+  extractAmbientModuleExports,
+  extractRealModuleExports,
+  hasDrift,
+  hasRelevantDrift,
+  scopeMissing,
+} from './sdk-drift.mjs';
 
 function withTmpDir(fn) {
   const dir = mkdtempSync(path.join(tmpdir(), 'sdk-drift-test-'));
@@ -199,5 +207,86 @@ test('extractAmbientModuleExports throws a clear error when the module name is w
       () => extractAmbientModuleExports(stubPath, '@fixture/does-not-exist'),
       /no ambient module named/,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #468 follow-up — missing-scope: the stub is the curation
+// ---------------------------------------------------------------------------
+
+test('scopeMissing itemizes only referenced missing symbols, counts the rest', () => {
+  const diff = {
+    missing: ['PluginContext', 'KnowledgeGraphInternals', 'NudgeScheduler'],
+    stale: ['removedThing'],
+    changed: [{ name: 'reshaped', real: 'a', stub: 'b' }],
+  };
+  const scoped = scopeMissing(diff, new Set(['PluginContext']));
+
+  assert.deepEqual(scoped.missing, ['PluginContext']);
+  assert.equal(scoped.missingOutOfScope, 2);
+  // stale/changed pass through untouched — they break authors regardless of scope.
+  assert.deepEqual(scoped.stale, ['removedThing']);
+  assert.equal(scoped.changed.length, 1);
+});
+
+test('out-of-scope missing alone does NOT count as drift; referenced missing does', () => {
+  // The failure mode this guards: scoping so aggressively that the weekly
+  // issue never opens again. A symbol the repo's own docs/examples reference
+  // MUST still trip the alarm.
+  const diff = { missing: ['InternalOnlyThing'], stale: [], changed: [] };
+  assert.equal(hasRelevantDrift(scopeMissing(diff, new Set())), false);
+
+  const diff2 = { missing: ['DocumentedThing'], stale: [], changed: [] };
+  assert.equal(hasRelevantDrift(scopeMissing(diff2, new Set(['DocumentedThing']))), true);
+});
+
+test('stale and changed still count as drift after scoping, with an empty reference set', () => {
+  // The other kill-the-alarm direction: an empty referenced set (e.g. the
+  // examples dir failed to scan) must never silence a stale or reshaped stub
+  // export — those are the classes that break compiling plugins.
+  assert.equal(
+    hasRelevantDrift(scopeMissing({ missing: [], stale: ['gone'], changed: [] }, new Set())),
+    true,
+  );
+  assert.equal(
+    hasRelevantDrift(
+      scopeMissing({ missing: [], stale: [], changed: [{ name: 'x', real: 'a', stub: 'b' }] }, new Set()),
+    ),
+    true,
+  );
+});
+
+test('collectReferencedSymbols reads example imports and doc backticks (from this repo)', () => {
+  // Against the real repo content, so the reference source cannot silently
+  // stop matching the file layout: the channel example imports these names.
+  const refs = collectReferencedSymbols(
+    ['examples', 'docs'],
+    '@omadia/channel-sdk',
+    new Set(),
+  );
+  assert.equal(refs.has('IncomingTurn'), true, 'named import in examples/channel must be collected');
+  const pluginRefs = collectReferencedSymbols(
+    ['examples', 'docs'],
+    '@omadia/plugin-api',
+    new Set(['PluginContext']),
+  );
+  assert.equal(pluginRefs.has('PluginContext'), true);
+});
+
+test('doc-only backtick references are collected on their own (no import path)', () => {
+  // The prior test used a symbol that is ALSO imported by an example, so the
+  // markdown branch could die without any test noticing (mutation check
+  // caught exactly that). This fixture isolates the branch: the symbol exists
+  // only in a markdown backtick.
+  withTmpDir((dir) => {
+    const docsDir = path.join(dir, 'docs');
+    mkdirSync(docsDir, { recursive: true });
+    writeFileSync(
+      path.join(docsDir, 'guide.md'),
+      'Use `DocOnlySymbol` to do the thing. Also `notARealExport` appears here.',
+    );
+    const refs = collectReferencedSymbols([docsDir], '@omadia/plugin-api', new Set(['DocOnlySymbol']));
+    assert.equal(refs.has('DocOnlySymbol'), true, 'backticked real export must be collected');
+    assert.equal(refs.has('notARealExport'), false, 'non-export backticks must not be collected');
   });
 });
