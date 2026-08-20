@@ -18,7 +18,9 @@
     "build": "npm run build --workspaces --if-present",
     "build:agent": "npm run build -w examples/agent-plugin",
     "build:channel": "npm run build -w examples/channel",
-    "clean": "npm run clean --workspaces --if-present"
+    "clean": "npm run clean --workspaces --if-present",
+    "test": "node --test scripts/lib/*.test.mjs",
+    "check:sdk-drift": "node scripts/check-sdk-drift.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
