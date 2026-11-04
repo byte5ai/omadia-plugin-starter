@@ -13,7 +13,9 @@ identity:
   domain: "webhook"
   name: "Webhook Channel"
   version: "0.1.0"                   # MUST equal package.json "version"
-  description: "Example Omadia channel: accepts inbound JSON webhooks, drives a turn, returns the reply."
+  description:                       # locale map; a bare string is read as English
+    en: "Example Omadia channel: accepts signed inbound JSON webhooks, drives a turn, returns the reply."
+    de: "Beispiel-Channel für Omadia: nimmt signierte JSON-Webhooks an, startet einen Turn und gibt die Antwort zurück."
   authors:
     - name: "Your Name"
       email: "you@example.com"
@@ -23,8 +25,12 @@ identity:
   categories:
     - "communication"
 
+# Checked against the HOST's @omadia/plugin-api version when the ZIP is
+# uploaded and when it is installed; outside the range the host refuses the
+# package. The third argument of ctx.routes.register (auth/body) exists since
+# plugin-api 1.1.0.
 compat:
-  core: ">=1.0 <2.0"
+  core: ">=1.1.0 <2.0"
   node: ">=20"
 
 depends_on: []
@@ -50,8 +56,13 @@ setup:
 
       1. Create a bot/app in the provider's developer console.
       2. Copy its **signing secret** (or token).
-      3. Set the provider's webhook URL to `<your-public-base-url>/api/example/webhook`.
+      3. Set the provider's webhook URL to `<your-public-base-url>/api/example-channel/webhook`.
+         Every request must carry `x-signature-256: sha256=<hex>`, an HMAC-SHA256
+         of the raw request body keyed with the signing secret.
       4. Paste the secret into **Webhook signing secret** below and install.
+      5. In the install dialog (or later on the plugin's store page), grant the public path
+         `/api/example-channel/webhook`. Until you grant it, omadia does not
+         serve the webhook.
     de: |
       ## Example-Channel verbinden
 
@@ -61,17 +72,32 @@ setup:
 
       1. Bot/App in der Developer-Console des Anbieters anlegen.
       2. **Signing Secret** (oder Token) kopieren.
-      3. Webhook-URL des Anbieters auf `<deine-public-base-url>/api/example/webhook` setzen.
+      3. Webhook-URL des Anbieters auf `<deine-public-base-url>/api/example-channel/webhook` setzen.
+         Jeder Request trägt `x-signature-256: sha256=<hex>`, ein HMAC-SHA256
+         über den unveränderten Request-Body mit dem Signing Secret als Schlüssel.
       4. Secret unten in **Webhook signing secret** eintragen und installieren.
+      5. Im Install-Dialog (oder später auf der Store-Seite des Plugins) den öffentlichen Pfad
+         `/api/example-channel/webhook` freigeben. Ohne Freigabe liefert omadia
+         den Webhook nicht aus.
   fields:
     - key: "signing_secret"
       type: "secret"
-      label: "Webhook signing secret (optional)"
-      help: "If set, inbound requests must send a matching 'x-webhook-secret' header. Stored encrypted in the vault."
-      required: false
-  self_test: false                   # nothing to validate at install time
+      label:
+        en: "Webhook signing secret"
+        de: "Webhook Signing Secret"
+      help:
+        en: "Key for the HMAC-SHA256 signature every request sends in 'x-signature-256'. Stored encrypted in the vault. Without it the webhook refuses every call."
+        de: "Schlüssel für die HMAC-SHA256-Signatur, die jeder Request in 'x-signature-256' mitschickt. Liegt verschlüsselt im Vault. Ohne Secret lehnt der Webhook jeden Aufruf ab."
+      required: true
 
 permissions:
+  # Prefixes this plugin asks to serve WITHOUT an omadia session. Each entry
+  # must be at least two segments deep and lie under `/api/plugins/` or under a
+  # prefix the plugin registers a router at. The operator grants it after
+  # install; ctx.routes.register(prefix, router, { auth: 'custom' }) throws
+  # unless the prefix lies beneath an entry here.
+  public_paths:
+    - "/api/example-channel/webhook"
   memory:
     reads: []
     writes: []
@@ -88,15 +114,15 @@ permissions:
 admin_ui_path: "/api/example-channel/admin/index.html"
 
 # Channel block (manifest schema section 14). This channel is webhook-driven,
-# so it declares the inbound route the runtime exposes. The plugin verifies the
-# request itself (see verify_signature) and mounts the handler via ctx.routes.
+# so it declares the inbound route. The plugin mounts the handler via
+# ctx.routes with auth 'custom' + body 'raw' and verifies the HMAC itself.
 channel:
   transport:
     kind: "webhook"                  # one of: webhook | websocket | long-poll
     routes:
       - path: "/api/example-channel/webhook"
         method: "POST"
-    verify_signature: true           # plugin checks 'x-webhook-secret' itself
+    verify_signature: true           # plugin checks the 'x-signature-256' HMAC itself
   capabilities:
     - "text"
     - "typing_indicator"

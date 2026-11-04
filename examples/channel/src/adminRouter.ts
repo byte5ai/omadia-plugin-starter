@@ -51,7 +51,9 @@ const PAGE = `<!doctype html>
     <p id="status">Loading status…</p>
     <p>
       POST messages to <code>/api/example-channel/webhook</code> as
-      <code>{ "text": "…", "conversationId": "…", "userId": "…" }</code>.
+      <code>{ "text": "…", "conversationId": "…", "userId": "…" }</code>,
+      signed with <code>x-signature-256: sha256=&lt;hex&gt;</code>
+      (HMAC-SHA256 of the raw body, keyed with the signing secret).
     </p>
     <script>
       fetch('api/status')
