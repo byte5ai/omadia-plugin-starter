@@ -30,13 +30,18 @@ Ein Plugin ist ein Ordner, der zu einer ZIP baut, die enthält:
 - `manifest.yaml` — wer du bist, was du brauchst, was du bereitstellst.
 - optional `skills/`, `assets/`.
 
-Bei der Installation tut der omadia-Host:
+Beim Hochladen und Installieren der ZIP macht der omadia-Host Folgendes:
 
 1. liest `manifest.yaml` und validiert es,
-2. merkt sich die Permissions, die du deklariert hast,
-3. importiert `dist/plugin.js` dynamisch,
-4. ruft `activate(ctx)` auf (oder `activate(ctx, core)` bei einem Channel),
-5. behält das zurückgegebene Handle und ruft `close()` beim Shutdown/Uninstall.
+2. prüft `compat.core` gegen seine eigene `@omadia/plugin-api`-Version und
+   lehnt das Paket ab, wenn der Bereich sie nicht einschließt (siehe unten),
+3. merkt sich die deklarierten Permissions und fragt den Operator nach den
+   Freigaben, die Zustimmung brauchen (öffentliche Pfade, SQL, …),
+4. importiert `dist/plugin.js` dynamisch,
+5. ruft `activate(ctx)` auf (oder `activate(ctx, core)` bei einem Channel),
+   danach deinen optionalen Export `verifyConnection(ctx)`,
+6. behält das zurückgegebene Handle und ruft `close()` beim Deaktivieren,
+   Deinstallieren oder Herunterfahren.
 
 Du greifst nie zu Globals wie `process.env` oder rohem `fetch`. Alles hängt an
 `ctx`, scoped auf dein Plugin:
@@ -45,10 +50,38 @@ Du greifst nie zu Globals wie `process.env` oder rohem `fetch`. Alles hängt an
 | --- | --- | --- |
 | Ein Secret (Token, Key) | `await ctx.secrets.require('x')` | als `type: secret`-Setup-Feld deklariert |
 | Einen Config-Wert | `ctx.config.get<T>('x')` | als Setup-Feld deklariert |
-| Ein Tool registrieren | `ctx.tools.register(spec, handler)` | immer (Agents) |
-| HTTP-Routen mounten | `ctx.routes.register(prefix, router)` | immer |
+| Ein Tool registrieren | `ctx.tools.register(spec, handler, options?)` | immer (Agents) |
+| HTTP-Routen mounten | `ctx.routes.register(prefix, router, { auth, body })` | immer; jedes `auth` außer `'session'` braucht einen freigegebenen `permissions.public_paths`-Eintrag |
+| Eine Seite listen (Teams-Tab, Hub-Karte) | `ctx.uiRoutes.register({ routeId, path, title })` | immer |
+| Ein Status-Badge zeigen | `ctx.status.report({ state, title })` | immer |
 | Ausgehendes HTTP | `ctx.http.fetch(url)` | `permissions.network.outbound` ist nicht leer |
-| Andere Plugins aufrufen | `ctx.services.get/provide(...)` | immer |
+| Eine Capability eines anderen Plugins | `ctx.services.get(name)` / `getOptional(name)` | `name` steht unter `requires` / `optional_requires` |
+| Eine Capability anbieten | `ctx.services.provide(name, impl)` | immer; unter `provides` eintragen, damit andere sie per `requires` anfordern können |
+
+Optionale Accessoren (`ctx.http`, `ctx.memory`, `ctx.llm`, …) sind
+`undefined`, solange das Manifest die zugehörige Permission nicht deklariert.
+Prüfe sie mit `if (ctx.http)`. Die vollständige Oberfläche steht in
+[`types/omadia-plugin-api.d.ts`](../../types/omadia-plugin-api.d.ts).
+
+## Gegen welche omadia-Version du baust
+
+`@omadia/plugin-api` ist der Vertrag zwischen deinem Plugin und dem Host. Er
+ist nach SemVer versioniert und wächst innerhalb von 1.x nur. Die Datei
+[`types/omadia-plugin-api.d.ts`](../../types/omadia-plugin-api.d.ts) in diesem
+Repo bildet **plugin-api 1.53.0** ab (die Version steht im Dateikopf). Jede
+Ergänzung ist im
+[`middleware/packages/plugin-api/CHANGELOG.md`](https://github.com/byte5ai/omadia/blob/main/middleware/packages/plugin-api/CHANGELOG.md)
+des omadia-Repos beschrieben.
+
+Zur Laufzeit linkt dein Plugin gegen die plugin-api **des Hosts**, und die
+kann älter sein als die, gegen die du kompiliert hast. Welche Versionen du
+unterstützt, sagst du mit `compat.core`: Der Host prüft den Bereich beim
+Hochladen der ZIP und noch einmal bei der Installation gegen seine eigene
+plugin-api-Version und lehnt das Paket außerhalb davon ab
+(`package.incompatible_core` / `install.incompatible_core`). Setz die
+Untergrenze auf die plugin-api-Version, die das Neueste eingeführt hat, das du
+nutzt, zum Beispiel `">=1.51.0 <2.0"` für `auth: 'teams-sso'`. Ohne `compat`
+gilt `">=1.0 <2.0"`.
 
 ## ZIP bauen
 

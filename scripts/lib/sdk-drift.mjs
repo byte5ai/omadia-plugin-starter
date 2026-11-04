@@ -52,6 +52,11 @@ const BASE_OPTIONS = {
 export function normalizeSignature(text) {
   return text
     .replace(/import\([^)]*\)\./g, '')
+    // A compiled `.d.ts` spells a top-level declaration `export declare
+    // class X`; inside the stub's `declare module` block the same declaration
+    // is `export class X` (the ambient context makes `declare` implicit).
+    .replace(/\bexport declare\s+/g, 'export ')
+    .replace(/^declare\s+/gm, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -68,7 +73,12 @@ function printSymbol(printer, symbol) {
 function collectExports(checker, printer, moduleSymbol) {
   const out = new Map();
   for (const exp of checker.getExportsOfModule(moduleSymbol)) {
-    out.set(exp.getName(), printSymbol(printer, exp));
+    // `export { Foo } from './foo.js'` yields an ALIAS symbol whose only
+    // declaration is the export specifier itself, which prints as the bare
+    // name `Foo`. Compare the declaration it points at instead, or every
+    // re-exported symbol reads as "changed" against the stub's inline copy.
+    const target = exp.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exp) : exp;
+    out.set(exp.getName(), printSymbol(printer, target));
   }
   return out;
 }

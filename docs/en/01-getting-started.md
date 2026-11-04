@@ -30,13 +30,18 @@ A plugin is a folder that builds into a ZIP containing:
 - `manifest.yaml` — who you are, what you need, what you expose.
 - optional `skills/`, `assets/`.
 
-At install time the omadia host:
+When you upload and install the ZIP, the omadia host:
 
 1. reads `manifest.yaml` and validates it,
-2. records the permissions you declared,
-3. dynamically imports `dist/plugin.js`,
-4. calls `activate(ctx)` (or `activate(ctx, core)` for a channel),
-5. keeps the returned handle and calls `close()` on shutdown/uninstall.
+2. checks `compat.core` against its own `@omadia/plugin-api` version and
+   refuses the package if the range excludes it (see below),
+3. records the permissions you declared and asks the operator to grant the
+   ones that need consent (public paths, SQL, …),
+4. dynamically imports `dist/plugin.js`,
+5. calls `activate(ctx)` (or `activate(ctx, core)` for a channel), then your
+   optional `verifyConnection(ctx)` export,
+6. keeps the returned handle and calls `close()` on deactivate, uninstall or
+   shutdown.
 
 You never reach for globals like `process.env` or raw `fetch`. Everything is on
 `ctx`, scoped to your plugin:
@@ -45,10 +50,37 @@ You never reach for globals like `process.env` or raw `fetch`. Everything is on
 | --- | --- | --- |
 | A secret (token, key) | `await ctx.secrets.require('x')` | declared as a `type: secret` setup field |
 | A config value | `ctx.config.get<T>('x')` | declared as a setup field |
-| To register a tool | `ctx.tools.register(spec, handler)` | always (agents) |
-| To mount HTTP routes | `ctx.routes.register(prefix, router)` | always |
+| To register a tool | `ctx.tools.register(spec, handler, options?)` | always (agents) |
+| To mount HTTP routes | `ctx.routes.register(prefix, router, { auth, body })` | always; `auth` other than `'session'` needs a granted `permissions.public_paths` entry |
+| To list a page (Teams tab, Hub card) | `ctx.uiRoutes.register({ routeId, path, title })` | always |
+| To show a status badge | `ctx.status.report({ state, title })` | always |
 | Outbound HTTP | `ctx.http.fetch(url)` | `permissions.network.outbound` is non-empty |
-| To call other plugins | `ctx.services.get/provide(...)` | always |
+| A capability of another plugin | `ctx.services.get(name)` / `getOptional(name)` | `name` declared under `requires` / `optional_requires` |
+| To offer a capability | `ctx.services.provide(name, impl)` | always; list it under `provides` so consumers can `requires` it |
+
+Optional accessors (`ctx.http`, `ctx.memory`, `ctx.llm`, …) are `undefined`
+unless the manifest declares the permission that gates them. Guard with
+`if (ctx.http)`. The full surface is in
+[`types/omadia-plugin-api.d.ts`](../../types/omadia-plugin-api.d.ts).
+
+## Which omadia version you build against
+
+`@omadia/plugin-api` is the contract between your plugin and the host. It
+is versioned with SemVer and only grows within 1.x. This repo's
+[`types/omadia-plugin-api.d.ts`](../../types/omadia-plugin-api.d.ts) mirrors
+**plugin-api 1.53.0** (the version is in the file header). The changelog of
+every addition is
+[`middleware/packages/plugin-api/CHANGELOG.md`](https://github.com/byte5ai/omadia/blob/main/middleware/packages/plugin-api/CHANGELOG.md)
+in the omadia repo.
+
+At runtime your plugin links against the **host's** plugin-api, which may be
+older than the one you compiled against. Say which versions you support in
+`compat.core`: the host checks the range against its own plugin-api version
+when the ZIP is uploaded and again at install, and refuses the package
+outside it (`package.incompatible_core` / `install.incompatible_core`). Set
+the lower bound to the plugin-api version that introduced the newest thing
+you use, for example `">=1.51.0 <2.0"` for `auth: 'teams-sso'`. Omitting
+`compat` means `">=1.0 <2.0"`.
 
 ## Build a ZIP
 

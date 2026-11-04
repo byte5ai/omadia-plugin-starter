@@ -11,7 +11,9 @@ identity:
   domain: "hello"
   name: "Hello Agent"
   version: "0.1.0"                   # MUST equal package.json "version"
-  description: "A minimal example Omadia agent that exposes a single greeting tool."
+  description:                       # locale map; a bare string is read as English
+    en: "A minimal example Omadia agent with one greeting tool and a page that also works as a Teams tab."
+    de: "Ein minimales Beispiel-Agent für Omadia mit einem Begrüßungs-Tool und einer Seite, die auch als Teams-Tab funktioniert."
   authors:
     - name: "Your Name"
       email: "you@example.com"
@@ -21,8 +23,11 @@ identity:
   categories:
     - "examples"
 
+# Checked against the HOST's @omadia/plugin-api version when the ZIP is
+# uploaded and when it is installed; outside the range the host refuses the
+# package. `auth: 'teams-sso'` (the Teams tab below) exists since 1.51.0.
 compat:
-  core: ">=1.0 <2.0"
+  core: ">=1.51.0 <2.0"
   node: ">=20"
 
 # Other plugins this agent needs activated first (e.g. "@omadia/memory" when
@@ -57,6 +62,11 @@ setup:
       1. Create an account at **your-provider.com**.
       2. Under *Settings → Developers*, generate an **API key**.
       3. Paste it into the field below and install.
+
+      The **Greetings** page also works as a Microsoft Teams tab. That needs an
+      active `@omadia/channel-teams` and your consent: grant the public path
+      `/p/agent-hello/teams` in the install dialog or on the plugin's store page. Every member of the
+      bot's tenant can then open the tab; guest accounts cannot.
     de: |
       ## Example Greeter einrichten
 
@@ -67,14 +77,23 @@ setup:
       1. Konto auf **your-provider.com** erstellen.
       2. Unter *Settings → Developers* einen **API-Key** erzeugen.
       3. Key unten in das Feld eintragen und installieren.
+
+      Die Seite **Greetings** funktioniert auch als Microsoft-Teams-Tab. Dafür
+      braucht es ein aktives `@omadia/channel-teams` und deine Zustimmung: den
+      öffentlichen Pfad `/p/agent-hello/teams` im Install-Dialog oder auf der
+      Store-Seite des Plugins freigeben. Danach kann jedes Mitglied des Bot-Tenants den Tab öffnen,
+      Gastkonten nicht.
   fields:
     - key: "greeting"
       type: "string"
-      label: "Greeting word"
-      help: "The word used to greet, e.g. 'Hello' or 'Hi'."
+      label:
+        en: "Greeting word"
+        de: "Begrüßungswort"
+      help:
+        en: "The word used to greet, e.g. 'Hello' or 'Hi'."
+        de: "Das Wort für die Begrüßung, z. B. 'Hallo' oder 'Hi'."
       required: false
       default: "Hello"
-  self_test: true
 
 # Each capability is a tool the orchestrator may call. `id` + `input_schema`
 # MUST match a ctx.tools.register(...) call in src/plugin.ts.
@@ -113,10 +132,14 @@ skills:
     kind: "prompt_partial"
     path: "skills/system-prompt.md"
     description: "Role and tone for the Hello agent."
-    shareable: false
 
 # Least-privilege by default — this example needs nothing external.
 permissions:
+  # The Teams-tab surface (see src/teamsTab.ts). The operator grants it after
+  # install; until then Teams tabs are not served. The browser page under
+  # /p/agent-hello stays behind the omadia session and needs no entry here.
+  public_paths:
+    - "/p/agent-hello/teams"
   memory:
     reads: []
     writes: []

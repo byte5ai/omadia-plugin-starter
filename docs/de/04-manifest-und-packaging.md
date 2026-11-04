@@ -14,7 +14,9 @@ identity:
   domain: "your-domain"        # kurzer Routing-/Gruppierungs-Key
   name: "Your Plugin"          # Anzeigename
   version: "0.1.0"             # erforderlich; semver, == package.json "version"
-  description: "≤140 Zeichen."
+  description:                 # Sprachkarte; ein nackter String gilt als ENGLISCH
+    en: "≤140 chars."
+    de: "≤140 Zeichen."
   authors:
     - { name: "Your Name", email: "you@example.com", url: "https://example.com" }
   license: "MIT"               # SPDX-Id
@@ -23,16 +25,18 @@ identity:
   categories: ["examples"]     # optionale Store-Facetten
 
 compat:
-  core: ">=1.0 <2.0"           # Host-Versionsbereich, den du unterstützt
+  core: ">=1.51.0 <2.0"        # Bereich der @omadia/plugin-api-Version DES HOSTS;
+                               # geprüft bei Upload und Installation (Default ">=1.0 <2.0")
   node: ">=20"                 # optional
 
-depends_on: []                 # andere Plugin-Ids, die zuerst aktivieren müssen
+depends_on: []                 # Plugin-Ids, die vorher installiert sein müssen;
+                               # ihre Secrets/Config sind über deine lesbar
                                # (z. B. "@omadia/memory", wenn du ctx.memory nutzt)
 
-provides: []                   # Capability-Ids, die dieses Plugin anderen anbietet
-requires: []                   # Capability-Ids, die von einem aktiven Plugin
-                               # bereitgestellt sein MÜSSEN — harter Fehler bei
-                               # der Aktivierung, wenn nicht
+provides: []                   # Capabilities, die du anbietest: "name@<major>"
+requires: []                   # Capabilities, die bereitgestellt sein MÜSSEN
+                               # ("name@^<major>"); ohne Provider keine Installation
+optional_requires: []          # Capabilities, die du nutzt, wenn vorhanden (getOptional)
 
 multi_instance: true           # false → nur eine Installation erlaubt; wenn false…
 multi_instance_justification: "" #   …ist hier ein nicht-leerer Grund PFLICHT
@@ -42,13 +46,7 @@ is_reference_only: true        # OB-29-0: aus dem Store ausblenden; nur
 
 lifecycle:
   entry: "dist/plugin.js"      # erforderlich; das Modul, das activate(...) exportiert
-  hooks:                       # optional; alle boolean, Default false
-    onInstall: true
-    onConfigure: true
-    onActivate: true
-    onDeactivate: true
-    onUninstall: true
-  uninstall_policy:            # was mit den Daten des Plugins beim Entfernen passiert
+  uninstall_policy:            # Schema-Feld; der aktuelle Core wertet es nicht aus
     entities: "delete"         # "keep" | "quarantine" | "delete"
     memory:   "delete"
     secrets:  "delete"
@@ -62,14 +60,14 @@ setup:
   fields:                      # Operator-Eingabeformular bei der Installation
     - key: "api_key"
       type: "secret"           # string | url | secret | oauth | enum | boolean | integer | host_list
-      label: "API key"
-      help: "Wo man ihn findet."
+      label: { en: "API key", de: "API-Key" }      # Sprachkarten, wie description
+      help:  { en: "Where to find it.", de: "Wo du ihn findest." }
       required: true
-      # typ-spezifische Extras: default, placeholder, pattern, enum:[…],
-      # provider/scopes (oauth)
+      # typ-spezifische Extras: default, placeholder, pattern + pattern_hint,
+      # enum: [{ value, label }], provider/scopes (oauth),
+      # multiline: true (string/secret → Textarea, z. B. ein PEM-Key)
       # options_provider: "list_things"  # Capability-Id liefert dynamisches Enum
       # multi: true                       # mehrere ausgewählte Werte erlauben
-  self_test: true              # nach Installation einmal aktivieren zum Prüfen
 
 permissions:                   # Least-Privilege; weggelassen = verweigert
   memory:  { reads: [], writes: [] }     # Namespace-Globs, z. B. "agent:@you/x:*"
@@ -80,15 +78,24 @@ permissions:                   # Least-Privilege; weggelassen = verweigert
                                          # ctx.knowledgeGraph.ingestEntities;
                                          # "odoo"/"confluence" reserviert (gestrippt)
   network:
-    outbound: []                         # Host-Globs; nicht leer → ctx.http existiert
+    outbound: []                         # Hosts, "*.x.com" = eine Subdomain-Ebene;
+                                         # nicht leer → ctx.http existiert
+    outbound_tcp: []                     # [{ host, port }], Literal oder "$config.<feld>"
+                                         # → ctx.net (SMTP, IMAP, …)
     web_scanner: false                   # true → ctx Web-Scanner-Oberfläche
     audit_mode: "single-host"            # single-host | allowlist | public-web
+  public_paths: []                       # Prefixe, die OHNE omadia-Session ausgeliefert
+                                         # werden (auth 'public' | 'custom' | 'teams-sso');
+                                         # der Operator gibt jeden einzeln frei
+  sql:                                   # plugin-eigene Postgres-Tabellen → ctx.sql,
+    ledger: "plg_you_your_plugin_migrations" # nach Freigabe durch den Operator
+    migrations: "migrations"
   filesystem: { scratch: false }         # true → ctx.scratch-Verzeichnis
   secrets: { runtime_write: false }      # true → ctx.secrets darf zur Laufzeit schreiben
-  subAgents:                             # gated ctx.subAgent.ask (sonst wirft es)
+  subAgents:                             # calls nicht leer → ctx.subAgent
     calls: []                            # erlaubte Sub-Agent-Ids; weggelassen = verweigert
     calls_per_invocation: 5              # Budget pro Handler-Aufruf (Default 5)
-  llm:                                   # gated ctx.llm.complete (sonst wirft es)
+  llm:                                   # models_allowed nicht leer → ctx.llm
     models_allowed: []                   # Modell-Globs, z. B. "claude-haiku-4-5*"
     calls_per_invocation: 2              # Default 5
     max_tokens_per_call: 1024            # Default 4096
@@ -113,13 +120,13 @@ playbook:                      # Routing-Hinweise in natürlicher Sprache
   not_for: ["…"]
 
 skills:                        # gebundelte Prompt-Partials / Schemas / Daten
-  - { id: "sys", kind: "prompt_partial", path: "skills/system.md", shareable: false }
+  - { id: "sys", kind: "prompt_partial", path: "skills/system.md" }
 
-jobs:                          # geplante Background-Jobs (cron); braucht den Host-
+jobs:                          # geplante Background-Jobs; braucht den Host-
   - name: "weekly-digest"      #   Scheduler. Gated auch ctx.jobs.register.
-    schedule: { cron: "0 8 * * MON" }
-    timeoutMs: 30000
-    overlap: skip              # skip | queue | allow
+    schedule: { cron: "0 8 * * MON" }   # oder "0 8 * * MON", oder { interval_ms: 60000 }
+    timeout_ms: 30000          # Default 30000
+    overlap: skip              # skip (Default) | queue
 
 # ── nur Integrationen ──────────────────────────────────────────────────────
 oauth_providers:               # kernel-vermittelte OAuth-Deskriptoren (inerte
@@ -154,18 +161,54 @@ channel:
 Alles unten ist **optional** und defaultet auf den sicheren/Aus-Wert — deklarier
 ein Feld nur, wenn du die Capability nutzt, die es gated.
 
-- **`provides` / `requires`** — Capability-Ids (Freitext-Strings), die ein
-  Plugin anbietet oder braucht. Ein `requires` ohne aktiven Provider ist ein
-  **harter Fehler bei der Aktivierung** — deklarier also nur, was du wirklich
-  brauchst.
-- **`jobs`** — cron-geplante Background-Arbeit (`{ name, schedule.cron,
-  timeoutMs, overlap }`, `overlap: skip | queue | allow`). Braucht den
-  Host-Scheduler; derselbe Check gated das programmatische `ctx.jobs.register`.
+- **`compat.core`** — ein Semver-Bereich über die `@omadia/plugin-api`-Version
+  **des Hosts**, denn gegen die linkt dein Plugin zur Laufzeit. Der Host lehnt
+  eine ZIP, deren Bereich ihn ausschließt, beim Upload
+  (`package.incompatible_core`) und bei der Installation
+  (`install.incompatible_core`) ab; ein ungültiger Bereich wird ebenfalls
+  abgelehnt. Setz die Untergrenze auf die plugin-api-Version, die das Neueste
+  eingeführt hat, das du nutzt (jede Ergänzung steht in
+  `middleware/packages/plugin-api/CHANGELOG.md` im omadia-Repo), und behalte
+  `<2.0`. Default `">=1.0 <2.0"`.
+- **`depends_on`** — konkrete Plugin-Ids. Die Installation wird abgelehnt,
+  solange sie nicht installiert sind, und dein `ctx.secrets` / `ctx.config`
+  lösen über ihre Werte auf (deine eigenen zuerst). Deklariere ein Setup-Feld
+  also nur, wenn kein Parent es hat.
+- **`provides` / `requires` / `optional_requires`** — Capabilities in der Form
+  `name@<major>` (`name@^<major>` ist auf der konsumierenden Seite erlaubt).
+  Der Name ist zugleich der `ctx.services`-Key. Ein `requires` ohne Provider
+  stoppt die Installation (`install.missing_capability`); `optional_requires`
+  nicht, und es legt keine Aktivierungsreihenfolge fest. Löse diese deshalb
+  erst bei Bedarf mit `ctx.services.getOptional(name)` auf.
+  `ctx.services.get`/`getOptional` werfen `ServiceNotDeclaredError` für einen
+  Namen, der nirgends deklariert ist.
+- **`permissions.public_paths`** — URL-Prefixe, die das Plugin ohne
+  omadia-Session ausliefern will, für `ctx.routes.register(prefix, router,
+  { auth: 'public' | 'custom' | 'teams-sso' })` und für `body: 'raw'`. Das
+  registrierte Prefix muss **unterhalb** eines Eintrags liegen, sonst wirft
+  `register()`. Jeder Eintrag ist ein schlichter Pfad mit mindestens zwei
+  Segmenten (keine Wildcards, kein Percent-Encoding, höchstens 16 Einträge),
+  unter `/api/plugins/` oder unter einem Prefix, an dem das Plugin einen Router
+  registriert, nie unter einer Core-Route. Der Operator gibt jeden Eintrag im
+  Install-Dialog oder auf der Store-Seite frei; ohne Freigabe wird er nicht
+  ausgeliefert. Siehe [Seiten und Teams-Tabs](./02-agent-plugin-bauen.md#seiten-und-teams-tabs).
+- **`permissions.sql`** — `{ ledger, migrations?, handoff? }`: plugin-eigene
+  Tabellen. Der Ledger-Name muss mit `plg_` und deiner bereinigten Plugin-Id
+  beginnen. Nach der Freigabe durch den Operator führt der Host das
+  Migrationsverzeichnis vor `activate()` aus und stellt `ctx.sql` bereit.
+- **`jobs`** — geplante Background-Arbeit (`{ name, schedule, timeout_ms,
+  overlap }`; `schedule` ist ein Cron-String, `{ cron }` oder
+  `{ interval_ms }`; `overlap: skip | queue`). Braucht den Host-Scheduler;
+  derselbe Check gated das programmatische `ctx.jobs.register`.
 - **`permissions.subAgents`** — `{ calls: [ids], calls_per_invocation }`
-  (Budget-Default 5). Ohne das wirft `ctx.subAgent.ask` `SubAgentPermissionDenied`.
+  (Budget-Default 5). Ohne das ist `ctx.subAgent` `undefined`; ein Ziel
+  außerhalb von `calls` wirft `SubAgentPermissionDeniedError`.
 - **`permissions.llm`** — `{ models_allowed: [globs], calls_per_invocation (Def
-  5), max_tokens_per_call (Def 4096) }`. Gated `ctx.llm.complete`; ein Modell
-  außerhalb der Liste wirft `LlmModelNotAllowed`.
+  5), max_tokens_per_call (Def 4096) }`. Stellt `ctx.llm` bereit (der Host
+  zahlt, kein API-Key im Plugin); ein Modell außerhalb der Liste wirft
+  `LlmModelNotAllowedError`. `complete()` nimmt außerdem `outputFormat`
+  (JSON-Schema, ab 1.22.0) und einen erzwungenen Tool-Aufruf (`tools` +
+  `toolChoice`, ab 1.44.0).
 - **`permissions.graph.entity_systems`** — plugin-eigene KG-Namespaces,
   akzeptiert von `ctx.knowledgeGraph.ingestEntities`. `odoo` / `confluence`
   sind host-reserviert und werden stillschweigend gestrippt.
@@ -196,6 +239,16 @@ ein Feld nur, wenn du die Capability nutzt, die es gated.
   `{ service, type: { from, name } }`.
 - **`multi_instance`** — defaultet `true`; setz `false` für Singletons, dann
   ist eine nicht-leere `multi_instance_justification` **erforderlich**.
+- **Sichtbarer Text ist eine Sprachkarte** — `identity.description`,
+  `setup.guide`, `setup.fields[].label` / `help` / `pattern_hint` und die
+  Labels von Enum-Optionen schreibst du als `{ en: "…", de: "…" }`. Ein nackter
+  String lädt weiter, gilt aber als Englisch und erscheint unverändert in jeder
+  UI-Sprache. `identity.name` bleibt ein schlichter String.
+- **Felder, die der aktuelle Core nicht auswertet** —
+  `lifecycle.uninstall_policy`, `lifecycle.hooks`, `setup.self_test` und
+  `skills[].shareable` werden akzeptiert, aber heute liest sie nichts. Um
+  Credentials nach der Installation zu prüfen, exportiere `verifyConnection`
+  (siehe [02](./02-agent-plugin-bauen.md#die-verbindung-prüfen-verifyconnection)).
 - **`privacy_class`** — `default` oder `strict` (strengere PII-Behandlung);
   alles andere fällt auf `default` zurück.
 - **`is_reference_only: true`** — blendet das Plugin aus dem Operator-Store
@@ -236,18 +289,18 @@ Regeln:
 
 ## Hochladen
 
-**Aktuell ist der einzige Weg, ein Plugin zu installieren, die ZIP, die du
-gerade gebaut hast.** Im omadia-Admin-UI unter *Store → Upload* reinziehen; der
-Host validiert das Manifest, prüft auf fehlende Host-Peers und registriert das
-Plugin. Zum Teilen reichst du die ZIP direkt weiter (E-Mail, geteiltes
-Laufwerk, eigener Download-Link).
+Im omadia-Admin-UI unter *Store* den lokalen Tab öffnen und die ZIP in die
+Upload-Fläche ziehen. Der Host validiert das Manifest, prüft `compat.core`
+gegen seine plugin-api-Version, prüft auf fehlende Host-Peers und registriert
+das Plugin; *Installieren* rendert dann das Setup-Formular und fragt nach den
+Freigaben, die dein Manifest anfordert (öffentliche Pfade, SQL, …).
 
-> ℹ️ **Bald: der omadia-Hub.** Eine öffentliche Registry, auf der du ein Plugin
-> einmal *einreichst* und jeder omadia-Host es entdecken, holen und (per
-> `sha256`) verifizieren kann — ohne manuelle ZIP-Weitergabe. **Das ist noch
-> nicht verfügbar**; bis dahin ist der ZIP-Upload oben der einzige unterstützte
-> Weg. Die ZIP, die du heute baust, ist genau das Artefakt, das der Hub später
-> annehmen wird — nichts davon ist Wegwerfarbeit.
+**Der omadia-Hub** unter [hub.omadia.ai](https://hub.omadia.ai) ist die
+öffentliche Registry. Jeder omadia-Host listet ihn unter *Store → Hub* und
+installiert daraus, nachdem er den `sha256` der ZIP geprüft hat. Das
+Veröffentlichen (`POST /api/publish`) braucht das Publish-Token des Hubs, das
+der Hub-Betreiber hält; ohne Token reichst du die ZIP direkt weiter. Die ZIP,
+die du hier baust, ist genau das Artefakt, das der Hub annimmt.
 
 ## Versionierung
 
@@ -258,10 +311,16 @@ halten) — und baue neu; der ZIP-Name (`out/<id>-<version>.zip`) ändert sich m
 ## Pre-Flight-Checkliste
 
 - [ ] `identity.id` == `package.json` `name`; `version`s stimmen überein.
+- [ ] Untergrenze von `compat.core` = plugin-api-Version der neuesten API, die du nutzt.
 - [ ] `lifecycle.entry: "dist/plugin.js"`.
 - [ ] Jedes registrierte Tool hat einen passenden `capabilities`-Eintrag (Agents).
 - [ ] Jeder `ctx.secrets`/`ctx.config`-Key hat einen `setup.fields`-Eintrag.
 - [ ] Drittsystem-Setup (falls vorhanden) in einer lokalisierten `setup.guide` dokumentiert.
 - [ ] `permissions` listen genau die Hosts/Namespaces, die du nutzt — nicht mehr.
+- [ ] Jede Route hat das richtige `auth`; Seiten mit Daten sind `'session'` oder
+      `'teams-sso'`, nie `'public'`; jedes Prefix ohne Session liegt unterhalb
+      eines `public_paths`-Eintrags.
+- [ ] Jeder Name für `ctx.services.get`/`getOptional` steht unter
+      `requires`/`optional_requires`.
 - [ ] `npm run typecheck` sauber, `npm run build` erzeugt die ZIP.
 - [ ] Platzhalter (`@acme/*`, `Your Name`) ersetzt.

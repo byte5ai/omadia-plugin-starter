@@ -26,7 +26,7 @@ export async function activate(ctx: PluginContext, core: CoreApi): Promise<Chann
 | `core` method | Use |
 | --- | --- |
 | `handleTurnStream(turn)` | Drive an orchestrator turn; yields `ChatStreamEvent`s. |
-| `registerRoute / registerRouter` | Mount channel-scoped HTTP (alternative to `ctx.routes`). |
+| `registerRoute / registerRouter` | Mount channel-scoped HTTP straight on the app. These bypass the `auth` modes and `public_paths` grants of `ctx.routes`: under `/api` the host's session gate still answers anonymous callers with 401 first, outside `/api` nothing protects them. Prefer `ctx.routes.register` with an explicit `auth`. |
 | `resolveIdentity(ref)` | Resolve a native user ref to a platform identity. |
 | `log(level, msg, ctx)` | Channel-scoped logging. |
 
@@ -34,8 +34,8 @@ export async function activate(ctx: PluginContext, core: CoreApi): Promise<Chann
 
 Whatever the transport, you build an `IncomingTurn` and hand it to the core.
 `handleTurnStream` yields a **discriminated union** — branch on `event.type`,
-accumulate `text_delta` chunks, and take the authoritative answer from the
-terminal `done` event:
+accumulate `text_delta` chunks, drop what `text_retract` takes back, and take
+the authoritative answer from the terminal `done` event:
 
 ```ts
 import {
@@ -58,6 +58,9 @@ let finalAnswer: string | null = null;
 for await (const event of core.handleTurnStream(turn)) {
   switch (event.type) {
     case 'text_delta': streamed += event.text; break;      // incremental
+    case 'text_retract':                                   // preamble taken back
+      streamed = streamed.slice(0, Math.max(0, streamed.length - event.chars));
+      break;
     case 'done':       finalAnswer = event.answer; break;  // authoritative
     case 'error':      throw new Error(event.message);
     default:           break;                              // tool_use, surface_*, …
@@ -66,8 +69,10 @@ for await (const event of core.handleTurnStream(turn)) {
 const answer = (finalAnswer ?? streamed).trim();
 ```
 
-A richer adapter also inspects `tool_use` / `heartbeat` to stream typing
-indicators and renders the terminal answer as native cards. Never index
+`text_retract` (#1500) removes the last `chars` characters of the preview: the
+model wrote them as a preamble to a tool call ("I'll check that first."), not
+as answer text. A richer adapter also inspects `tool_use` / `heartbeat` to
+stream typing indicators and renders the terminal answer as native cards. Never index
 `event.text` on the bare union — only the `text_delta` arm has it; the `switch`
 is what narrows each arm safely.
 
@@ -119,10 +124,18 @@ the seam.
 The manifest `channel.transport.kind` is one of `webhook`, `websocket`,
 `long-poll`.
 
-**Webhook** (the example) — the host exposes an inbound route; you mount the
-handler and verify the request:
+### Inbound: the webhook route
+
+**Webhook** (the example). The sender is an external system without an omadia
+session, so a default `'session'` route would answer it with 401. Register the
+webhook with `auth: 'custom'`, declare its prefix in `permissions.public_paths`
+and verify every request yourself. `body: 'raw'` gives you the bytes the
+sender signed:
 
 ```yaml
+permissions:
+  public_paths:
+    - "/api/example-channel/webhook"
 channel:
   transport:
     kind: "webhook"
@@ -132,10 +145,35 @@ channel:
 ```
 
 ```ts
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 const router = express.Router();
-router.post('/webhook', express.json(), async (req, res) => { /* …build turn… */ });
-const dispose = ctx.routes.register('/api/example-channel', router);
+router.post('/', async (req, res) => {
+  const raw: unknown = req.body;                 // Buffer, exactly as sent
+  if (!Buffer.isBuffer(raw)) { res.status(400).end(); return; }
+  const expected = Buffer.from(`sha256=${createHmac('sha256', secret).update(raw).digest('hex')}`);
+  const given = Buffer.from(req.get('x-signature-256') ?? '');
+  // timingSafeEqual throws on different lengths, hence the length check first.
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+    res.status(401).json({ error: 'bad signature' });
+    return;
+  }
+  const body = JSON.parse(raw.toString('utf8'));
+  /* …build turn… */
+});
+const dispose = ctx.routes.register('/api/example-channel/webhook', router, {
+  auth: 'custom',
+  body: 'raw',
+});
 ```
+
+Never sign `JSON.stringify(req.body)`: re-serialising changes the bytes.
+`auth: 'custom'` is a promise that the router authenticates **every** request,
+so the example refuses all calls (503) while no signing secret is set and
+reports that through `ctx.status`. After install the operator grants
+`/api/example-channel/webhook`; until then the host does not serve it.
+
+### Websocket / long-poll
 
 **Websocket / long-poll** (Discord, Slack, Telegram) — open a long-lived client
 in `activate`, route its messages, and close it in `close()`:
@@ -160,10 +198,13 @@ admin_ui_path: "/api/example-channel/admin/index.html"
 ```
 
 ```ts
-ctx.routes.register('/api/example-channel/admin', createAdminRouter({ ... }));
+ctx.routes.register('/api/example-channel/admin', createAdminRouter({ ... }), { auth: 'session' });
 ```
 
-The web UI renders that path in an iframe. Expose a small `/api/status` JSON
+The web UI renders that path in an iframe for signed-in operators, so it
+stays a `'session'` route. Use **relative** `fetch()` URLs in the page (the
+iframe is served through a `/bot-api` rewrite), answer every JSON endpoint as
+`{ ok: true, … }` / `{ ok: false, error }`, expose a small `/api/status`
 endpoint for a live status pill, and return mock data when `ctx.smokeMode` is
 true.
 
@@ -204,12 +245,16 @@ npm run build -w examples/channel
 > Hub page and next to the install form. See
 > [Manifest & packaging](./04-manifest-and-packaging.md).
 
-Upload, fill setup, then exercise the webhook:
+Upload, fill setup, grant the public path `/api/example-channel/webhook`,
+then exercise the webhook:
 
 ```bash
+BODY='{ "text": "hello", "conversationId": "c1", "userId": "u1" }'
+SIG="sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SIGNING_SECRET" | sed 's/^.* //')"
 curl -X POST https://<host>/api/example-channel/webhook \
   -H 'content-type: application/json' \
-  -d '{ "text": "hello", "conversationId": "c1", "userId": "u1" }'
+  -H "x-signature-256: $SIG" \
+  -d "$BODY"
 ```
 
 → Next: [04 · Manifest & packaging](./04-manifest-and-packaging.md)

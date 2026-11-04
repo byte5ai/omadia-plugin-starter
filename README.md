@@ -31,7 +31,7 @@ your code into the ZIP the omadia admin UI accepts.
 
 | Kind | What it is | Entry point | Example |
 | --- | --- | --- | --- |
-| **Agent** | A skill with tools the orchestrator can call. | `activate(ctx)` | [`examples/agent-plugin`](./examples/agent-plugin) |
+| **Agent** | A skill with tools the orchestrator can call, optionally with its own pages (browser and Teams tab). | `activate(ctx)` | [`examples/agent-plugin`](./examples/agent-plugin) |
 | **Channel** | A surface (Discord, Slack, a webhook…) that routes user messages in and replies back out. | `activate(ctx, core)` | [`examples/channel`](./examples/channel) |
 | **Integration** | A connector that exposes an external system as tools/services. | `activate(ctx)` | see the agent example, same shape |
 
@@ -108,8 +108,17 @@ omadia-plugin-starter/
 host at runtime**. They are not published to npm, so you neither install nor
 bundle them. To let your plugin typecheck offline, this repo ships faithful
 type stubs in [`types/`](./types). The build marks the real packages as
-`external`, so the host supplies the genuine implementations. Keep the stubs in
-sync with the omadia version you target.
+`external`, so the host supplies the genuine implementations.
+
+`types/omadia-plugin-api.d.ts` mirrors **`@omadia/plugin-api` 1.53.0**: the
+plugin-authoring modules are copied verbatim from that version's compiled
+declarations, so route auth modes (`'session' | 'public' | 'custom' |
+'teams-sso'`), `TeamsSsoUser`, `verifyConnection`, `ctx.sql` and the rest of
+`ctx` are typed exactly as the host defines them. The version and commit are
+in the file header. A weekly workflow (`SDK drift check`) compares both stubs
+against omadia `main` and opens an issue when they drift. State the host
+versions your plugin supports in the manifest's `compat.core`
+([01 · Getting started](./docs/en/01-getting-started.md#which-omadia-version-you-build-against)).
 
 ---
 

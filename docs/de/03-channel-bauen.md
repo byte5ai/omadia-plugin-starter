@@ -26,7 +26,7 @@ Routes). `core` ist die Channel-spezifische API:
 | `core`-Methode | Wofür |
 | --- | --- |
 | `handleTurnStream(turn)` | Treibt einen Orchestrator-Turn an; liefert `ChatStreamEvent`s. |
-| `registerRoute / registerRouter` | Mountet Channel-scoped HTTP (Alternative zu `ctx.routes`). |
+| `registerRoute / registerRouter` | Mountet Channel-scoped HTTP direkt an der App. Das umgeht die `auth`-Modi und `public_paths`-Freigaben von `ctx.routes`: Unter `/api` beantwortet das Session-Gate des Hosts anonyme Aufrufer zuerst mit 401, außerhalb von `/api` schützt sie nichts. Nimm lieber `ctx.routes.register` mit explizitem `auth`. |
 | `resolveIdentity(ref)` | Löst eine native User-Ref zu einer Plattform-Identität auf. |
 | `log(level, msg, ctx)` | Channel-scoped Logging. |
 
@@ -34,8 +34,8 @@ Routes). `core` ist die Channel-spezifische API:
 
 Egal welcher Transport — du baust einen `IncomingTurn` und gibst ihn an den
 Core. `handleTurnStream` liefert eine **discriminated union** — branche auf
-`event.type`, sammle `text_delta`-Chunks und nimm die maßgebliche Antwort aus
-dem terminalen `done`-Event:
+`event.type`, sammle `text_delta`-Chunks, entferne, was `text_retract`
+zurücknimmt, und nimm die maßgebliche Antwort aus dem terminalen `done`-Event:
 
 ```ts
 import {
@@ -58,6 +58,9 @@ let finalAnswer: string | null = null;
 for await (const event of core.handleTurnStream(turn)) {
   switch (event.type) {
     case 'text_delta': streamed += event.text; break;      // inkrementell
+    case 'text_retract':                                   // Vorrede zurückgenommen
+      streamed = streamed.slice(0, Math.max(0, streamed.length - event.chars));
+      break;
     case 'done':       finalAnswer = event.answer; break;  // maßgeblich
     case 'error':      throw new Error(event.message);
     default:           break;                              // tool_use, surface_*, …
@@ -66,7 +69,10 @@ for await (const event of core.handleTurnStream(turn)) {
 const answer = (finalAnswer ?? streamed).trim();
 ```
 
-Ein reicherer Adapter inspiziert zusätzlich `tool_use` / `heartbeat`, um
+`text_retract` (#1500) entfernt die letzten `chars` Zeichen der Vorschau: Das
+Modell hat sie als Vorrede zu einem Tool-Aufruf geschrieben („Ich schaue das
+erst nach."), nicht als Antworttext. Ein reicherer Adapter inspiziert
+zusätzlich `tool_use` / `heartbeat`, um
 Typing-Indicators zu streamen, und rendert die finale Antwort als native
 Cards. Greif nie auf `event.text` direkt auf der Union zu — nur der
 `text_delta`-Arm hat es; erst der `switch` narrowed jeden Arm sicher.
@@ -120,10 +126,18 @@ ganze Sinn dieser Naht ist.
 Das Manifest-`channel.transport.kind` ist eines von `webhook`, `websocket`,
 `long-poll`.
 
-**Webhook** (das Beispiel) — der Host exponiert eine Inbound-Route; du mountest
-den Handler und verifizierst den Request:
+### Eingang: die Webhook-Route
+
+**Webhook** (das Beispiel). Der Absender ist ein externes System ohne
+omadia-Session, eine Default-Route mit `'session'` würde ihm also mit 401
+antworten. Registriere den Webhook mit `auth: 'custom'`, deklariere sein
+Prefix in `permissions.public_paths` und prüfe jeden Request selbst.
+`body: 'raw'` liefert dir die Bytes, die der Absender signiert hat:
 
 ```yaml
+permissions:
+  public_paths:
+    - "/api/example-channel/webhook"
 channel:
   transport:
     kind: "webhook"
@@ -133,10 +147,36 @@ channel:
 ```
 
 ```ts
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 const router = express.Router();
-router.post('/webhook', express.json(), async (req, res) => { /* …Turn bauen… */ });
-const dispose = ctx.routes.register('/api/example-channel', router);
+router.post('/', async (req, res) => {
+  const raw: unknown = req.body;                 // Buffer, genau wie gesendet
+  if (!Buffer.isBuffer(raw)) { res.status(400).end(); return; }
+  const expected = Buffer.from(`sha256=${createHmac('sha256', secret).update(raw).digest('hex')}`);
+  const given = Buffer.from(req.get('x-signature-256') ?? '');
+  // timingSafeEqual wirft bei unterschiedlicher Länge, daher zuerst der Längenvergleich.
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+    res.status(401).json({ error: 'bad signature' });
+    return;
+  }
+  const body = JSON.parse(raw.toString('utf8'));
+  /* …Turn bauen… */
+});
+const dispose = ctx.routes.register('/api/example-channel/webhook', router, {
+  auth: 'custom',
+  body: 'raw',
+});
 ```
+
+Signiere nie `JSON.stringify(req.body)`: Neu serialisieren ändert die Bytes.
+`auth: 'custom'` ist die Zusage, dass der Router **jeden** Request
+authentifiziert. Das Beispiel lehnt deshalb alle Aufrufe ab (503), solange kein
+Signing Secret gesetzt ist, und meldet das über `ctx.status`. Nach der
+Installation gibt der Operator `/api/example-channel/webhook` frei; bis dahin
+liefert der Host die Route nicht aus.
+
+### Websocket / long-poll
 
 **Websocket / long-poll** (Discord, Slack, Telegram) — öffne in `activate` einen
 langlebigen Client, route seine Nachrichten und schließe ihn in `close()`:
@@ -161,12 +201,15 @@ admin_ui_path: "/api/example-channel/admin/index.html"
 ```
 
 ```ts
-ctx.routes.register('/api/example-channel/admin', createAdminRouter({ ... }));
+ctx.routes.register('/api/example-channel/admin', createAdminRouter({ ... }), { auth: 'session' });
 ```
 
-Das Web-UI rendert diesen Pfad in einem iframe. Exponiere einen kleinen
-`/api/status`-JSON-Endpoint für ein Live-Status-Pill und gib Mock-Daten zurück,
-wenn `ctx.smokeMode` true ist.
+Das Web-UI rendert diesen Pfad für angemeldete Operatoren in einem iframe,
+deshalb bleibt es eine `'session'`-Route. Nutze auf der Seite **relative**
+`fetch()`-URLs (das iframe läuft über einen `/bot-api`-Rewrite), beantworte
+jeden JSON-Endpoint mit `{ ok: true, … }` / `{ ok: false, error }`, exponiere
+einen kleinen `/api/status`-Endpoint für ein Live-Status-Pill und gib
+Mock-Daten zurück, wenn `ctx.smokeMode` true ist.
 
 ## Warum Channels bundlen müssen
 
@@ -208,12 +251,16 @@ npm run build -w examples/channel
 > Manifest — sie wird auf der Hub-Seite und neben dem Install-Formular gerendert.
 > Siehe [Manifest & Packaging](./04-manifest-und-packaging.md).
 
-Hochladen, Setup ausfüllen, dann den Webhook testen:
+Hochladen, Setup ausfüllen, den öffentlichen Pfad
+`/api/example-channel/webhook` freigeben, dann den Webhook testen:
 
 ```bash
+BODY='{ "text": "hello", "conversationId": "c1", "userId": "u1" }'
+SIG="sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SIGNING_SECRET" | sed 's/^.* //')"
 curl -X POST https://<host>/api/example-channel/webhook \
   -H 'content-type: application/json' \
-  -d '{ "text": "hello", "conversationId": "c1", "userId": "u1" }'
+  -H "x-signature-256: $SIG" \
+  -d "$BODY"
 ```
 
 → Weiter: [04 · Manifest & Packaging](./04-manifest-und-packaging.md)
