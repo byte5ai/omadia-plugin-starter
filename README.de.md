@@ -26,7 +26,7 @@ omadia ist ein agentisches OS: Jeder Agent, jeder Channel und jede Integration i
 
 | Art | Was es ist | Einstieg | Beispiel |
 | --- | --- | --- | --- |
-| **Agent** | Eine Fähigkeit mit Tools, die der Orchestrator aufrufen kann. | `activate(ctx)` | [`examples/agent-plugin`](./examples/agent-plugin) |
+| **Agent** | Eine Fähigkeit mit Tools, die der Orchestrator aufrufen kann, optional mit eigenen Seiten (Browser und Teams-Tab). | `activate(ctx)` | [`examples/agent-plugin`](./examples/agent-plugin) |
 | **Channel** | Eine Oberfläche (Discord, Slack, ein Webhook), die Nutzer-Nachrichten rein- und Antworten rausroutet. | `activate(ctx, core)` | [`examples/channel`](./examples/channel) |
 | **Integration** | Ein Connector, der ein externes System als Tools/Services bereitstellt. | `activate(ctx)` | siehe Agent-Beispiel, gleiche Form |
 
@@ -96,7 +96,9 @@ omadia-plugin-starter/
 
 ### Zu den SDK-Typ-Stubs
 
-`@omadia/plugin-api` und `@omadia/channel-sdk` werden **vom omadia-Host zur Laufzeit bereitgestellt**. Sie liegen nicht auf npm, du installierst und bundlest sie also nicht. Damit dein Plugin trotzdem offline typecheckt, liefert dieses Repo originalgetreue Typ-Stubs in [`types/`](./types). Der Build markiert die echten Pakete als `external`, der Host liefert dann die echten Implementierungen. Halte die Stubs zu der omadia-Version aktuell, die du anvisierst.
+`@omadia/plugin-api` und `@omadia/channel-sdk` werden **vom omadia-Host zur Laufzeit bereitgestellt**. Sie liegen nicht auf npm, du installierst und bundlest sie also nicht. Damit dein Plugin trotzdem offline typecheckt, liefert dieses Repo originalgetreue Typ-Stubs in [`types/`](./types). Der Build markiert die echten Pakete als `external`, der Host liefert dann die echten Implementierungen.
+
+`types/omadia-plugin-api.d.ts` bildet **`@omadia/plugin-api` 1.53.0** ab: Die Module für Plugin-Autoren sind wörtlich aus den kompilierten Deklarationen dieser Version übernommen. Route-Auth-Modi (`'session' | 'public' | 'custom' | 'teams-sso'`), `TeamsSsoUser`, `verifyConnection`, `ctx.sql` und der Rest von `ctx` sind also genau so typisiert, wie der Host sie definiert. Version und Commit stehen im Dateikopf. Ein wöchentlicher Workflow (`SDK drift check`) vergleicht beide Stubs mit omadia `main` und öffnet ein Issue, wenn sie abweichen. Welche Host-Versionen dein Plugin unterstützt, steht im Manifest unter `compat.core` ([01 · Erste Schritte](./docs/de/01-erste-schritte.md#gegen-welche-omadia-version-du-baust)).
 
 ---
 
