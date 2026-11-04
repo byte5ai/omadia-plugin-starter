@@ -199,6 +199,60 @@ export interface Ref {
   });
 });
 
+test('a named re-export (`export { X } from`) is compared by its declaration, not its alias', () => {
+  // @omadia/channel-sdk's barrel re-exports by name. Before the alias was
+  // resolved, every such symbol printed as its bare name on the real side
+  // and read as "changed" against the stub, which buried real drift.
+  withTmpDir((dir) => {
+    writeFileSync(
+      path.join(dir, 'widget.d.ts'),
+      'export interface Widget {\n  id: string;\n}\nexport declare class WidgetError extends Error {\n  constructor(id: string);\n}\n',
+    );
+    const realPath = path.join(dir, 'real.d.ts');
+    const stubPath = path.join(dir, 'stub.d.ts');
+    writeFileSync(realPath, "export { Widget, WidgetError } from './widget.js';\n");
+    writeFileSync(
+      stubPath,
+      stubFixture(`
+        export interface Widget {
+          id: string;
+        }
+        export class WidgetError extends Error {
+          constructor(id: string);
+        }
+      `),
+    );
+
+    const diff = diffExports(
+      extractRealModuleExports(realPath),
+      extractAmbientModuleExports(stubPath, '@fixture/widgets'),
+    );
+    assert.equal(hasDrift(diff), false, JSON.stringify(diff));
+  });
+});
+
+test('MUTATION: a reshaped re-exported declaration is still caught as "changed"', () => {
+  withTmpDir((dir) => {
+    writeFileSync(
+      path.join(dir, 'widget.d.ts'),
+      'export interface Widget {\n  id: string;\n  ownerId: string;\n}\n',
+    );
+    const realPath = path.join(dir, 'real.d.ts');
+    const stubPath = path.join(dir, 'stub.d.ts');
+    writeFileSync(realPath, "export { Widget } from './widget.js';\n");
+    writeFileSync(stubPath, stubFixture('export interface Widget {\n  id: string;\n}'));
+
+    const diff = diffExports(
+      extractRealModuleExports(realPath),
+      extractAmbientModuleExports(stubPath, '@fixture/widgets'),
+    );
+    assert.deepEqual(
+      diff.changed.map((c) => c.name),
+      ['Widget'],
+    );
+  });
+});
+
 test('extractAmbientModuleExports throws a clear error when the module name is wrong', () => {
   withTmpDir((dir) => {
     const stubPath = path.join(dir, 'stub.d.ts');
