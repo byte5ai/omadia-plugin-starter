@@ -1,6 +1,10 @@
 /**
  * Local type stubs for `@omadia/channel-sdk`.
- * Last synced against byte5ai/omadia @ 327ddf89250eb36a5e0b1965dafc82139a40d4c6 (2026-07-08).
+ * Last synced against byte5ai/omadia @ 327ddf89250eb36a5e0b1965dafc82139a40d4c6 (2026-07-08),
+ * plus the `text_retract` stream event (byte5ai/omadia #1500). The rest of
+ * this stub has NOT been re-synced since; the weekly SDK drift check lists the
+ * additive fields it lacks. The `@omadia/plugin-api` stub next to it is synced
+ * to 1.53.0.
  *
  * Like `@omadia/plugin-api`, this package is provided by the Omadia host at
  * runtime and is not on npm. These declarations let a channel compile offline.
@@ -179,6 +183,14 @@ declare module '@omadia/channel-sdk' {
         skillName: string | null;
       }
     | { type: 'text_delta'; text: string }
+    /**
+     * #1500 — take the last `chars` characters back out of the `text_delta`
+     * preview: the model wrote them as preamble to a data-gathering tool call
+     * ("I'll check my memory directory first."). Carries no text on purpose.
+     * `done.answer` stays authoritative and restores the text if no answer
+     * follows it.
+     */
+    | { type: 'text_retract'; chars: number }
     | {
         type: 'tool_use';
         id: string;
