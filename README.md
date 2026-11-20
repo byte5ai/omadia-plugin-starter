@@ -69,7 +69,7 @@ The kernel rejects a plugin at upload that breaks them:
   to a model provider host.
 - **Network only via `ctx.http`.** The kernel sandboxes the global `fetch`
   (`PLUGIN_EGRESS_MODE`); allowed hosts are `permissions.network.outbound`.
-- **`compat.core`** is `">=1.77.0 <2.0"` for anything that uses the new kinds
+- **`compat.core`** is `">=1.78.0 <2.0"` for anything that uses the new kinds
   or `agent_templates`; older cores cannot load them.
 
 ---
