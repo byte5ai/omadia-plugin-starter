@@ -28,7 +28,7 @@ Ein Plugin ist ein Ordner, der zu einer ZIP baut, die enthält:
 
 - `dist/plugin.js` — dein gebundelter Code, der `activate(...)` exportiert.
 - `manifest.yaml` — wer du bist, was du brauchst, was du bereitstellst.
-- optional `skills/`, `assets/`.
+- optional `assets/` (und `skills/` beim Kind `skill`).
 
 Beim Hochladen und Installieren der ZIP macht der omadia-Host Folgendes:
 
@@ -43,14 +43,14 @@ Beim Hochladen und Installieren der ZIP macht der omadia-Host Folgendes:
 6. behält das zurückgegebene Handle und ruft `close()` beim Deaktivieren,
    Deinstallieren oder Herunterfahren.
 
-Du greifst nie zu Globals wie `process.env` oder rohem `fetch`. Alles hängt an
+Du greifst nie zu Globals wie `process.env` oder rohem `fetch` (der Kernel sandboxt ihn; Netz läuft über `ctx.http`, Modelle über `ctx.llm`). Alles hängt an
 `ctx`, scoped auf dein Plugin:
 
 | Du brauchst… | Nimm… | Bereitgestellt, wenn… |
 | --- | --- | --- |
 | Ein Secret (Token, Key) | `await ctx.secrets.require('x')` | als `type: secret`-Setup-Feld deklariert |
 | Einen Config-Wert | `ctx.config.get<T>('x')` | als Setup-Feld deklariert |
-| Ein Tool registrieren | `ctx.tools.register(spec, handler, options?)` | immer (Agents) |
+| Ein Tool registrieren | `ctx.tools.register(spec, handler, options?)` | immer (Capability-Plugins) |
 | HTTP-Routen mounten | `ctx.routes.register(prefix, router, { auth, body })` | immer; jedes `auth` außer `'session'` braucht einen freigegebenen `permissions.public_paths`-Eintrag |
 | Eine Seite listen (Teams-Tab, Hub-Karte) | `ctx.uiRoutes.register({ routeId, path, title })` | immer |
 | Ein Status-Badge zeigen | `ctx.status.report({ state, title })` | immer |
@@ -58,10 +58,19 @@ Du greifst nie zu Globals wie `process.env` oder rohem `fetch`. Alles hängt an
 | Eine Capability eines anderen Plugins | `ctx.services.get(name)` / `getOptional(name)` | `name` steht unter `requires` / `optional_requires` |
 | Eine Capability anbieten | `ctx.services.provide(name, impl)` | immer; unter `provides` eintragen, damit andere sie per `requires` anfordern können |
 
-Optionale Accessoren (`ctx.http`, `ctx.memory`, `ctx.llm`, …) sind
+Optionale Accessoren (`ctx.http`, `ctx.llm`, …) sind
 `undefined`, solange das Manifest die zugehörige Permission nicht deklariert.
 Prüfe sie mit `if (ctx.http)`. Die vollständige Oberfläche steht in
 [`types/omadia-plugin-api.d.ts`](../../types/omadia-plugin-api.d.ts).
+
+## Welche Art Plugin du baust
+
+Ein Plugin ist nur die Lieferform; `identity.kind` sagt, was es liefert:
+`integration`, `tool`, `skill`, `channel`, `model`, `archetype`,
+`system-module` oder `agent-template`. Die Kinds `agent` und `extension` sind
+ausgemustert: Ein Plugin hat weder Persona noch eigene Modell-Schleife, es
+liefert Tools, und der Agent spricht. Siehe
+[02](./02-capability-plugin-bauen.md#was-ein-plugin-ist-und-was-nicht).
 
 ## Gegen welche omadia-Version du baust
 
@@ -80,7 +89,7 @@ Hochladen der ZIP und noch einmal bei der Installation gegen seine eigene
 plugin-api-Version und lehnt das Paket außerhalb davon ab
 (`package.incompatible_core` / `install.incompatible_core`). Setz die
 Untergrenze auf die plugin-api-Version, die das Neueste eingeführt hat, das du
-nutzt, zum Beispiel `">=1.51.0 <2.0"` für `auth: 'teams-sso'`. Ohne `compat`
+nutzt, zum Beispiel `">=1.51.0 <2.0"` für `auth: 'teams-sso'`; die neuen Kinds und `agent_templates` brauchen `">=1.78.0 <2.0"`. Ohne `compat`
 gilt `">=1.0 <2.0"`.
 
 ## ZIP bauen
@@ -88,7 +97,7 @@ gilt `">=1.0 <2.0"`.
 Aus dem Repo-Root:
 
 ```bash
-npm run build:agent      # ein Beispiel
+npm run build:tool       # ein Beispiel
 npm run build            # alle Beispiele (Workspaces)
 ```
 
@@ -102,6 +111,6 @@ npm run typecheck
 
 ## Weiter
 
-- Eine Fähigkeit mit Tools → [02 · Agent-Plugin bauen](./02-agent-plugin-bauen.md)
+- Tools für Agents → [02 · Capability-Plugin bauen](./02-capability-plugin-bauen.md)
 - Eine Messaging-Oberfläche anbinden → [03 · Channel bauen](./03-channel-bauen.md)
 - Jedes Manifest-Feld + wie der Upload läuft → [04 · Manifest & Packaging](./04-manifest-und-packaging.md)

@@ -10,7 +10,9 @@ schema_version: "1"            # required
 
 identity:
   id: "@you/your-plugin"       # required; reverse-DNS, == package.json "name"
-  kind: "agent"                # "agent" (default) | "channel" | "integration"
+  kind: "tool"                 # integration | tool | skill | channel | model |
+                               # archetype | system-module | agent-template
+                               # ("agent" and "extension" are retired)
   domain: "your-domain"        # short routing/grouping key
   name: "Your Plugin"          # display name
   version: "0.1.0"             # required; semver, == package.json "version"
@@ -25,8 +27,9 @@ identity:
   categories: ["examples"]     # optional store facets
 
 compat:
-  core: ">=1.51.0 <2.0"        # range of the HOST's @omadia/plugin-api version;
-                               # checked at upload and install (default ">=1.0 <2.0")
+  core: ">=1.78.0 <2.0"        # range of the HOST's @omadia/plugin-api version;
+                               # checked at upload and install (default ">=1.0 <2.0").
+                               # The new kinds and agent_templates need >=1.78.0
   node: ">=20"                 # optional
 
 depends_on: []                 # plugin ids that must be installed first; their
@@ -70,7 +73,8 @@ setup:
       # multi: true                       # allow multiple selected values
 
 permissions:                   # least-privilege; omitted = denied
-  memory:  { reads: [], writes: [] }     # namespace globs, e.g. "agent:@you/x:*"
+  memory:  { reads: [], writes: [] }     # namespace globs; technical state only, a plugin
+                                         # has no conversation memory
   graph:
     reads:  []                           # node labels, e.g. "Turn", "Person"
     writes: []
@@ -79,7 +83,8 @@ permissions:                   # least-privilege; omitted = denied
                                          # "odoo"/"confluence" reserved (stripped)
   network:
     outbound: []                         # hosts, "*.x.com" = one subdomain level;
-                                         # non-empty → ctx.http exists
+                                         # non-empty → ctx.http exists. Network ONLY
+                                         # via ctx.http (global fetch is sandboxed)
     outbound_tcp: []                     # [{ host, port }], literal or "$config.<field>"
                                          # → ctx.net (SMTP, IMAP, …)
     web_scanner: false                   # true → ctx web-scanner surface
@@ -92,10 +97,8 @@ permissions:                   # least-privilege; omitted = denied
     migrations: "migrations"
   filesystem: { scratch: false }         # true → ctx.scratch dir
   secrets: { runtime_write: false }      # true → ctx.secrets may write at runtime
-  subAgents:                             # non-empty calls → ctx.subAgent
-    calls: []                            # allowed sub-agent ids; omit = denied
-    calls_per_invocation: 5              # per-handler budget (default 5)
-  llm:                                   # non-empty models_allowed → ctx.llm
+  llm:                                   # non-empty models_allowed → ctx.llm (the ONLY
+                                         # model access; runs in the calling agent's turn)
     models_allowed: []                   # model globs, e.g. "claude-haiku-4-5*"
     calls_per_invocation: 2              # default 5
     max_tokens_per_call: 1024            # default 4096
@@ -103,24 +106,32 @@ permissions:                   # least-privilege; omitted = denied
   events: { emit: false }                # true → ctx.events.emit declared events
   mcp: false                             # true, or { servers_hint: [...] } → ctx.mcp
 
-# ── agents only ────────────────────────────────────────────────────────────
-capabilities:                  # the tools the orchestrator can call
-  - id: "do_thing"
+# ── capability plugins (kinds tool / integration) ──────────────────────────
+capabilities:                  # one entry per registered tool
+  - id: "do_thing"             # == the ctx.tools.register name, unique per instance
     description: "…"
     input_schema:  { type: "object", required: ["x"], properties: { x: { type: "string" } } }
     output_schema: { type: "object", properties: { y: { type: "string" } } }
-    side_effects: "read"       # "read" | "write"
+    side_effects: "read"       # "read" | "write" | "none"; without it: unknown
     idempotent: true
     timeout_ms: 5000
     rate_limit: { per_minute: 30 }
 
-playbook:                      # natural-language routing guidance
+playbook:                      # natural-language guidance: when to use the tools
   when_to_use: "…"
   example_prompts: ["…"]
   not_for: ["…"]
 
-skills:                        # bundled prompt-partials / schemas / data
-  - { id: "sys", kind: "prompt_partial", path: "skills/system.md" }
+agent_templates:               # inactive presets for the Agent Builder (the role
+  - id: "greeter"              #   a plugin must not carry itself); one per language
+    name: "Greeter"
+    short_description: "…"     # <= 80
+    long_description: "…"      # <= 4000
+    instructions: "…"          # <= 20000
+    language: "en"             # BCP 47
+    capabilities: ["@you/your-plugin"]   # suggestions only
+    # optional: archetype, verbosity (tldr|brief|standard|detailed|max),
+    #           persona: { axes: { warmth: 60 } }  — strict: unknown fields reject
 
 jobs:                          # scheduled background jobs; needs the host
   - name: "weekly-digest"      #   scheduler. Also guards ctx.jobs.register.
@@ -153,8 +164,38 @@ channel:
   adapters: ["text", "markdown"]               # outbound render shapes
 ```
 
-> Agents declare `capabilities` + `playbook`; channels declare the `channel`
-> block instead. Don't mix them.
+> Capability plugins declare `capabilities` + `playbook` (+ `agent_templates`);
+> channels declare the `channel` block instead. Don't mix them.
+
+### Kinds
+
+| Kind | One sentence |
+| --- | --- |
+| `integration` | Access to a system with its own credentials, offered as tools and services. |
+| `tool` | Tools with local logic and no credentials of their own. |
+| `skill` | A reusable procedure an agent can follow. |
+| `channel` | A surface that routes user messages in and replies out. |
+| `model` | A model, embeddings or transcription provider; only the kernel's model gateway calls it. |
+| `archetype` | A kind of agent, selectable in the Agent Builder. |
+| `system-module` | Infrastructure of omadia itself. |
+| `agent-template` | Only agent templates, no tools. |
+
+`agent` and `extension` are retired. A former `extension` is a `system-module`
+(or a `model` plugin when it is an LLM provider); a former `agent` plugin is a
+`tool` or `integration` plugin plus an agent template.
+
+### The boundary (the kernel rejects it at upload)
+
+- No `persona`, `speaker`, `personality` or `system_prompt` in the manifest.
+- No `skills` entry of `kind: prompt_partial`.
+- No `AGENT.md` (except for kind `agent-template`).
+- No own model loop and no persona: a plugin delivers tools, the agent speaks.
+- Models only through `ctx.llm`. No `anthropicClient@1`, `llm@1` or
+  `llmProviderPool` in `requires`, no own Anthropic/OpenAI client, no direct
+  `fetch` to a model provider host. `embeddingClient@1` and `transcription@1`
+  stay allowed.
+- Network only through `ctx.http` (allow-list `permissions.network.outbound`).
+  The kernel sandboxes global `fetch` (`PLUGIN_EGRESS_MODE`).
 
 ### Advanced fields
 
@@ -188,7 +229,7 @@ field only when you use the capability it gates.
   most 16 entries), under `/api/plugins/` or under a prefix the plugin
   registers a router at, never under a core route. The operator grants each
   entry in the install dialog or on the store page; ungranted, it is not
-  served. See [Pages and Teams tabs](./02-build-an-agent-plugin.md#pages-and-teams-tabs).
+  served. See [Pages and Teams tabs](./02-build-a-capability-plugin.md#pages-and-teams-tabs).
 - **`permissions.sql`** — `{ ledger, migrations?, handoff? }`: plugin-owned
   tables. The ledger name must start with `plg_` plus your sanitized plugin
   id. After the
@@ -198,12 +239,18 @@ field only when you use the capability it gates.
   overlap }`; `schedule` is a cron string, `{ cron }` or `{ interval_ms }`;
   `overlap: skip | queue`). Needs the host scheduler; the same check guards
   programmatic `ctx.jobs.register`.
-- **`permissions.subAgents`** — `{ calls: [ids], calls_per_invocation }` (budget
-  default 5). Without it `ctx.subAgent` is `undefined`; a target outside
-  `calls` throws `SubAgentPermissionDeniedError`.
+- **`side_effects`** (per `capabilities` entry) — `read`, `write` or `none`:
+  `write` changes a system, `none` touches no system. A tool without an entry
+  counts as `unknown`, so declare every registered tool.
+- **`agent_templates`** — inactive agent presets, read strictly (an unknown
+  field rejects the manifest). Persona axes: `formality`, `directness`,
+  `warmth`, `humor`, `sarcasm`, `conciseness`, `proactivity`, `autonomy`,
+  `risk_tolerance`, `creativity`, `drama`, `philosophy` (0-100), plus optional
+  `template` and `custom_notes` (<= 2000). See
+  [02](./02-build-a-capability-plugin.md#agent-templates).
 - **`permissions.llm`** — `{ models_allowed: [globs], calls_per_invocation (def
-  5), max_tokens_per_call (def 4096) }`. Provides `ctx.llm` (the host pays,
-  no API key in the plugin); a model outside the list throws
+  5), max_tokens_per_call (def 4096) }`. Provides `ctx.llm`, the only way a
+  plugin reaches a model (the host pays, no API key in the plugin); a model outside the list throws
   `LlmModelNotAllowedError`. `complete()` also takes `outputFormat` (JSON
   schema, 1.22.0+) and a forced tool call (`tools` + `toolChoice`, 1.44.0+).
 - **`permissions.graph.entity_systems`** — plugin-owned KG namespaces accepted
@@ -241,7 +288,7 @@ field only when you use the capability it gates.
 - **Fields the current core does not act on** — `lifecycle.uninstall_policy`,
   `lifecycle.hooks`, `setup.self_test` and `skills[].shareable` are accepted
   but nothing reads them today. To check credentials after install, export
-  `verifyConnection` (see [02](./02-build-an-agent-plugin.md#checking-the-connection-verifyconnection)).
+  `verifyConnection` (see [02](./02-build-a-capability-plugin.md#checking-the-connection-verifyconnection)).
 - **`privacy_class`** — `default` or `strict` (stricter PII handling); anything
   else falls back to `default`.
 - **`is_reference_only: true`** — hides the plugin from the operator store and
@@ -275,7 +322,7 @@ Rules:
   `lifecycle.entry` must point at the former.
 - **No `node_modules/`** — esbuild bundles your non-host deps into
   `dist/plugin.js`.
-- `skills/` must be in the ZIP if your manifest references prompt-partials.
+- `skills/` is only for kind `skill` data; a capability plugin has no prompt-partials.
 
 ## Uploading
 
@@ -300,9 +347,11 @@ ZIP name (`out/<id>-<version>.zip`) changes with it.
 ## Pre-flight checklist
 
 - [ ] `identity.id` == `package.json` `name`; `version`s match.
-- [ ] `compat.core` lower bound = the plugin-api version of the newest API you use.
+- [ ] `compat.core` lower bound = the plugin-api version of the newest API you use (`>=1.78.0` for the new kinds and `agent_templates`).
+- [ ] `identity.kind` is not `agent` or `extension`; no persona, `prompt_partial` skill or `AGENT.md`.
 - [ ] `lifecycle.entry: "dist/plugin.js"`.
-- [ ] Every registered tool has a matching `capabilities` entry (agents).
+- [ ] Every registered tool has a matching `capabilities` entry with `side_effects`.
+- [ ] Models only via `ctx.llm`, network only via `ctx.http`.
 - [ ] Every `ctx.secrets`/`ctx.config` key has a `setup.fields` entry.
 - [ ] Third-party setup (if any) documented in a localized `setup.guide`.
 - [ ] `permissions` list exactly the hosts/namespaces you use — no more.

@@ -1,0 +1,226 @@
+schema_version: "1"
+
+# ===========================================================================
+# @acme/tool-hello — a minimal example Omadia capability plugin (kind `tool`).
+# Rename every "@acme/tool-hello" / "Your Name" placeholder before publishing.
+#
+# A capability plugin delivers TOOLS. It has no persona, no system prompt and
+# no model loop of its own; the operator grants its tools to an agent in the
+# Agent Builder. The role a plugin used to carry ships as `agent_templates`
+# (inactive presets) at the bottom of this file.
+# ===========================================================================
+
+identity:
+  id: "@acme/tool-hello"             # MUST equal package.json "name"
+  kind: "tool"                       # integration | tool | skill | channel | model | archetype | system-module | agent-template
+  domain: "hello"
+  name: "Hello Tools"
+  version: "0.1.0"                   # MUST equal package.json "version"
+  description:                       # locale map; a bare string is read as English
+    en: "A minimal example capability plugin with two tools and a page that also works as a Teams tab."
+    de: "Ein minimales Beispiel-Capability-Plugin für Omadia mit zwei Tools und einer Seite, die auch als Teams-Tab funktioniert."
+  authors:
+    - name: "Your Name"
+      email: "you@example.com"
+      url: "https://example.com"
+  license: "MIT"
+  icon: "./assets/icon.svg"
+  categories:
+    - "examples"
+
+# Checked against the HOST's @omadia/plugin-api version when the ZIP is
+# uploaded and when it is installed; outside the range the host refuses the
+# package. The kinds `tool` etc. and `agent_templates` load from 1.78.0 on;
+# older cores reject them. (`auth: 'teams-sso'` exists since 1.51.0.)
+compat:
+  core: ">=1.78.0 <2.0"
+  node: ">=20"
+
+# Other plugins this plugin needs activated first (e.g. the integration whose
+# system your tools call). Empty here — this example is self-contained.
+depends_on: []
+
+lifecycle:
+  entry: "dist/plugin.js"            # the module that exports activate(ctx)
+  uninstall_policy:
+    entities: "delete"
+    memory: "delete"
+    secrets: "delete"
+
+# Operator-filled install form. `type: secret` fields go to the vault and are
+# read via ctx.secrets; everything else is read via ctx.config.
+setup:
+  # `guide` (OPTIONAL) is a localized markdown installation guide for your
+  # plugin's third-party system. Keys are locales (`en`, `de`, …). It renders
+  # automatically on the Hub plugin page and in the Omadia store, next to the
+  # install form. Use it to explain steps the operator must do OUTSIDE Omadia
+  # (create an account, register an app, get an API key, …). Ship at least
+  # `en`; add `de` (and others) when you can. Delete it if there is no external
+  # setup.
+  guide:
+    en: |
+      ## Set up the Example Greeter
+
+      This demo plugin needs no third-party account — replace this guide with the
+      real steps for your service. A good guide answers "how do I get the values
+      the install form asks for?". For example:
+
+      1. Create an account at **your-provider.com**.
+      2. Under *Settings → Developers*, generate an **API key**.
+      3. Paste it into the field below and install.
+
+      The **Greetings** page also works as a Microsoft Teams tab. That needs an
+      active `@omadia/channel-teams` and your consent: grant the public path
+      `/p/tool-hello/teams` in the install dialog or on the plugin's store page. Every member of the
+      bot's tenant can then open the tab; guest accounts cannot.
+    de: |
+      ## Example Greeter einrichten
+
+      Dieses Demo-Plugin braucht kein Drittkonto — ersetze diese Anleitung durch
+      die echten Schritte deines Dienstes. Eine gute Anleitung beantwortet „Wie
+      komme ich an die Werte, die das Install-Formular abfragt?". Zum Beispiel:
+
+      1. Konto auf **your-provider.com** erstellen.
+      2. Unter *Settings → Developers* einen **API-Key** erzeugen.
+      3. Key unten in das Feld eintragen und installieren.
+
+      Die Seite **Greetings** funktioniert auch als Microsoft-Teams-Tab. Dafür
+      braucht es ein aktives `@omadia/channel-teams` und deine Zustimmung: den
+      öffentlichen Pfad `/p/tool-hello/teams` im Install-Dialog oder auf der
+      Store-Seite des Plugins freigeben. Danach kann jedes Mitglied des Bot-Tenants den Tab öffnen,
+      Gastkonten nicht.
+  fields:
+    - key: "greeting"
+      type: "string"
+      label:
+        en: "Greeting word"
+        de: "Begrüßungswort"
+      help:
+        en: "The word used to greet, e.g. 'Hello' or 'Hi'."
+        de: "Das Wort für die Begrüßung, z. B. 'Hallo' oder 'Hi'."
+      required: false
+      default: "Hello"
+
+# Each capability is a tool an agent may call. `id` + `input_schema` MUST match
+# a ctx.tools.register(...) call in src/plugin.ts. Every tool declares its
+# `side_effects`: "read" (reads a system), "write" (changes a system) or
+# "none" (touches no system). A tool without an entry counts as `unknown`.
+# Tool names are unique across the whole instance: keep a plugin prefix.
+capabilities:
+  - id: "hello_say"
+    description: "Returns a friendly greeting for the given name."
+    input_schema:
+      type: "object"
+      required: ["name"]
+      properties:
+        name:
+          type: "string"
+          description: "Who to greet."
+    output_schema:
+      type: "object"
+      properties:
+        message: { type: "string" }
+    side_effects: "none"
+    idempotent: true
+    timeout_ms: 5000
+
+  - id: "hello_stats"
+    description: "Returns how many greetings were served since activation and who was greeted last."
+    input_schema:
+      type: "object"
+      properties: {}
+    output_schema:
+      type: "object"
+      properties:
+        served: { type: "integer" }
+        last_name: { type: ["string", "null"] }
+    side_effects: "none"
+    idempotent: true
+    timeout_ms: 2000
+
+# Natural-language guidance for the agent that holds these tools: when to use
+# them and when not. Knowledge about the tools belongs here and in the tool
+# descriptions, not in a prompt file (no `skills` of kind `prompt_partial`).
+playbook:
+  when_to_use: |
+    A teaching example. Use hello_say to greet a person by name and hello_stats
+    to report how many greetings were served. Both tools only touch this
+    plugin's own counter, never an external system.
+  not_for:
+    - "Anything that needs a real system or real data."
+  example_prompts:
+    - "Say hello to Ada."
+    - "How many greetings have we served?"
+
+# Least-privilege by default — this example needs nothing external.
+permissions:
+  # The Teams-tab surface (see src/teamsTab.ts). The operator grants it after
+  # install; until then Teams tabs are not served. The browser page under
+  # /p/tool-hello stays behind the omadia session and needs no entry here.
+  public_paths:
+    - "/p/tool-hello/teams"
+  graph:
+    reads: []
+    writes: []
+  network:
+    outbound: []
+  filesystem:
+    scratch: false
+
+# Inactive presets (spec 2042 §5.10): the role a capability plugin used to
+# carry as persona. An operator turns a template into an agent in the Agent
+# Builder and grants this plugin there; installing the plugin creates no agent
+# and grants nothing. One template per language. The block is read strictly:
+# an unknown field gets the whole manifest rejected.
+agent_templates:
+  - id: "greeter"                    # ^[a-z][a-z0-9-]{0,62}$, unique in the package
+    archetype: "standard"            # optional
+    name: "Greeter"                  # <= 120
+    short_description: "Greets people warmly and reports how many greetings were served."   # <= 80
+    long_description: >-             # <= 4000
+      Welcomes people by name with the hello tools and answers questions about
+      how many greetings were served. A starting point to copy for your own
+      role.
+    instructions: |                  # <= 20000: role and way of working
+      You are a warm, concise greeter.
+
+      When someone asks you to greet a person, call `hello_say` with the name
+      and pass the greeting on in your own words. If no name is given, greet
+      the world. When asked how many greetings were served, call
+      `hello_stats` and report the numbers; never guess them.
+
+      Keep replies to a single friendly sentence.
+    language: "en"                   # BCP 47
+    verbosity: "brief"               # tldr | brief | standard | detailed | max (optional)
+    persona:                         # optional: Agent Builder axes, 0-100
+      axes:
+        warmth: 70
+        conciseness: 80
+    capabilities:                    # suggestions only; the operator grants
+      - "@acme/tool-hello"
+
+  - id: "greeter-de"
+    archetype: "standard"
+    name: "Begrüßer"
+    short_description: "Begrüßt Menschen herzlich und nennt, wie viele Begrüßungen es gab."
+    long_description: >-
+      Begrüßt Menschen mit den Hello-Tools namentlich und beantwortet Fragen
+      dazu, wie viele Begrüßungen es gab. Ein Ausgangspunkt zum Kopieren für
+      die eigene Rolle.
+    instructions: |
+      Du bist ein herzlicher, knapper Begrüßer.
+
+      Bittet dich jemand, eine Person zu begrüßen, ruf `hello_say` mit dem
+      Namen auf und gib die Begrüßung in eigenen Worten weiter. Fehlt ein
+      Name, begrüße die Welt. Fragt jemand, wie viele Begrüßungen es gab, ruf
+      `hello_stats` auf und nenne die Zahlen; rate sie nie.
+
+      Antworte in einem einzigen freundlichen Satz.
+    language: "de"
+    verbosity: "brief"
+    persona:
+      axes:
+        warmth: 70
+        conciseness: 80
+    capabilities:
+      - "@acme/tool-hello"

@@ -20,24 +20,59 @@ ship it.
 
 ---
 
-omadia is an agentic OS: every agent, channel and integration is a **plugin**
-the host loads, configures and sandboxes at runtime. This repository is a
-ready-to-fork template with two working examples and a build script that turns
-your code into the ZIP the omadia admin UI accepts.
+omadia is an agentic OS: every capability, channel and model is a **plugin**
+the host loads, configures and sandboxes at runtime. A plugin is only the
+delivery form; agents are built in the Agent Builder and receive the tools of
+the plugins an operator grants them. This repository is a ready-to-fork
+template with two working examples and a build script that turns your code into
+the ZIP the omadia admin UI accepts.
 
 ---
 
 ## What you can build
 
-| Kind | What it is | Entry point | Example |
-| --- | --- | --- | --- |
-| **Agent** | A skill with tools the orchestrator can call, optionally with its own pages (browser and Teams tab). | `activate(ctx)` | [`examples/agent-plugin`](./examples/agent-plugin) |
-| **Channel** | A surface (Discord, Slack, a webhook…) that routes user messages in and replies back out. | `activate(ctx, core)` | [`examples/channel`](./examples/channel) |
-| **Integration** | A connector that exposes an external system as tools/services. | `activate(ctx)` | see the agent example, same shape |
+A plugin's manifest `identity.kind` is one of:
 
-All three share one contract: export an `async activate(...)` that returns a
+| Kind | What it is | Example |
+| --- | --- | --- |
+| `integration` | Access to a system with its own credentials, offered as tools and services. | same shape as the tool example |
+| `tool` | Tools with local logic, optionally with its own pages (browser and Teams tab), plus `agent_templates`. | [`examples/tool-plugin`](./examples/tool-plugin) |
+| `skill` | A reusable procedure an agent can follow. | |
+| `channel` | A surface (Discord, Slack, a webhook…) that routes user messages in and replies back out. | [`examples/channel`](./examples/channel) |
+| `model` | A model, embeddings or transcription provider; only the kernel's model gateway calls it. | |
+| `archetype` | A kind of agent, selectable in the Agent Builder. | |
+| `system-module` | Infrastructure of omadia itself. | |
+| `agent-template` | Only agent templates, no tools. | |
+
+`agent` and `extension` are **retired** kinds (an old `extension` is a
+`system-module`, or a `model` plugin for an LLM provider).
+
+All plugins share one contract: export an `async activate(...)` that returns a
 handle with `close()`. The difference is what they declare in `manifest.yaml`
 and which `ctx` accessors they use.
+
+### The rules of the plugin boundary
+
+The kernel rejects a plugin at upload that breaks them:
+
+- **No persona.** No `persona`/`speaker`/`personality`/`system_prompt` in the
+  manifest, no `skills` of `kind: prompt_partial`, no `AGENT.md` (except for
+  kind `agent-template`). A plugin has no model loop of its own. The role a
+  plugin used to carry ships as **`agent_templates`** (inactive presets, one
+  per language) that an operator turns into an agent.
+- **Tools declare `side_effects`.** Every tool registered with
+  `ctx.tools.register` has a `capabilities` entry with `side_effects: read |
+  write | none`; without one it counts as `unknown`. `activate` returns
+  `{ close }`, not a toolkit.
+- **Models only via `ctx.llm`.** No raw model services (`anthropicClient@1`,
+  `llm@1`, `llmProviderPool`), no own Anthropic/OpenAI client, no direct call
+  to a model provider host.
+- **Network only via `ctx.http`.** The kernel sandboxes the global `fetch`
+  (`PLUGIN_EGRESS_MODE`); allowed hosts are `permissions.network.outbound`.
+- **`compat.core`** is `">=1.78.0 <2.0"` for anything that uses the new kinds
+  or `agent_templates`; older cores cannot load them.
+
+---
 
 ---
 
@@ -50,7 +85,7 @@ nvm use            # or: install Node >= 20
 npm install        # installs the shared toolchain (workspaces)
 
 # Pick an example, build its upload ZIP:
-npm run build:agent      # → examples/agent-plugin/out/acme-agent-hello-0.1.0.zip
+npm run build:tool       # → examples/tool-plugin/out/acme-tool-hello-0.1.0.zip
 npm run build:channel    # → examples/channel/out/acme-channel-webhook-0.1.0.zip
 
 # …or typecheck / build everything:
@@ -72,7 +107,7 @@ Then open the omadia **admin UI → Store → Upload** and drop the ZIP in.
 your code (src/plugin.ts)
         │   esbuild bundle  (host-provided peers stay external)
         ▼
-   dist/plugin.js  +  manifest.yaml  +  skills/  +  assets/
+   dist/plugin.js  +  manifest.yaml  +  assets/
         │   zip
         ▼
    out/<id>-<version>.zip  ──upload──▶  omadia host
@@ -98,7 +133,7 @@ omadia-plugin-starter/
 │   ├── omadia-plugin-api.d.ts
 │   └── omadia-channel-sdk.d.ts
 └── examples/
-    ├── agent-plugin/            ← @acme/agent-hello
+    ├── tool-plugin/             ← @acme/tool-hello (kind tool + agent templates)
     └── channel/                 ← @acme/channel-webhook
 ```
 
@@ -127,7 +162,7 @@ versions your plugin supports in the manifest's `compat.core`
 | Guide | English | Deutsch |
 | --- | --- | --- |
 | Getting started | [01](./docs/en/01-getting-started.md) | [01](./docs/de/01-erste-schritte.md) |
-| Build an agent plugin | [02](./docs/en/02-build-an-agent-plugin.md) | [02](./docs/de/02-agent-plugin-bauen.md) |
+| Build a capability plugin | [02](./docs/en/02-build-a-capability-plugin.md) | [02](./docs/de/02-capability-plugin-bauen.md) |
 | Build a channel | [03](./docs/en/03-build-a-channel.md) | [03](./docs/de/03-channel-bauen.md) |
 | Manifest & packaging | [04](./docs/en/04-manifest-and-packaging.md) | [04](./docs/de/04-manifest-und-packaging.md) |
 
