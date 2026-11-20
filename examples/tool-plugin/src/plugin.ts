@@ -7,24 +7,27 @@ import { TEAMS_DATA_SEGMENT, createTeamsTabRouters } from './teamsTab.js';
  * Reverse-DNS identity — MUST equal `identity.id` in manifest.yaml and the
  * `name` field of package.json.
  */
-export const AGENT_ID = '@acme/agent-hello' as const;
+export const PLUGIN_ID = '@acme/tool-hello' as const;
 
 /** Plugin pages live under `/p/<id without scope>`; channel-teams builds tab
  *  URLs from the same rule. */
-const PAGE_MOUNT = '/p/' + AGENT_ID.replace(/^@[^/]+\//, '');
+const PAGE_MOUNT = '/p/' + PLUGIN_ID.replace(/^@[^/]+\//, '');
 /** Teams-tab surface. MUST equal the manifest `permissions.public_paths` entry. */
 const TEAMS_MOUNT = `${PAGE_MOUNT}/teams`;
 
-export interface AgentHandle {
+export interface PluginHandle {
   close(): Promise<void>;
 }
 
 /**
- * Agent plugins export `activate(ctx)`. The host calls it once, scoped to this
- * plugin's identity, and keeps the returned handle until shutdown.
+ * Capability plugins (kind `tool`) export `activate(ctx)`. The host calls it
+ * once, scoped to this plugin's identity, and keeps the returned handle until
+ * shutdown. The plugin registers tools and returns `{ close }`: no toolkit
+ * object, no sub-agent, no system prompt, no model loop. Which agent may call
+ * the tools is the operator's grant, not the plugin's business.
  */
-export async function activate(ctx: PluginContext): Promise<AgentHandle> {
-  ctx.log('activating', { agentId: AGENT_ID });
+export async function activate(ctx: PluginContext): Promise<PluginHandle> {
+  ctx.log('activating', { pluginId: PLUGIN_ID });
 
   // Manifest `setup.fields` arrive via ctx.config (plain values) and
   // ctx.secrets (vault-encrypted). Always provide a sensible fallback.
@@ -33,13 +36,18 @@ export async function activate(ctx: PluginContext): Promise<AgentHandle> {
   const stats: GreetingsStats = { served: 0, lastName: null };
   const disposers: Array<() => void> = [];
 
-  // Register one native tool. Its `name` + `input_schema` MUST match the
-  // matching entry under `capabilities` in manifest.yaml.
+  // Register every tool with ctx.tools.register(spec, handler). Names are
+  // unique across the whole instance, so keep the plugin prefix (`hello_`).
+  // Each name + input_schema MUST match a `capabilities` entry in
+  // manifest.yaml, and that entry carries the tool's `side_effects`.
+  // What an agent needs to know about a tool belongs in `description` (and in
+  // the manifest's `playbook`), because the plugin has no prompt of its own.
   disposers.push(
     ctx.tools.register(
       {
-        name: 'say_hello',
-        description: 'Returns a friendly greeting for the given name.',
+        name: 'hello_say',
+        description:
+          'Returns a friendly greeting for the given name. Without a name it greets the world.',
         input_schema: {
           type: 'object',
           properties: {
@@ -53,15 +61,27 @@ export async function activate(ctx: PluginContext): Promise<AgentHandle> {
         const who = (name ?? '').trim() || 'world';
         stats.served += 1;
         stats.lastName = who;
-        // A native tool ALWAYS returns a string — usually JSON the model reads.
+        // A native tool ALWAYS returns a string, usually JSON the model reads.
         return JSON.stringify({ message: `${greeting}, ${who}!` });
       },
     ),
   );
 
+  disposers.push(
+    ctx.tools.register(
+      {
+        name: 'hello_stats',
+        description:
+          'Returns how many greetings were served since activation and who was greeted last.',
+        input_schema: { type: 'object', properties: {} },
+      },
+      async () => JSON.stringify({ served: stats.served, last_name: stats.lastName }),
+    ),
+  );
+
   // ── Optional: a page with plugin data, for browsers AND Teams tabs. ──────
   // Delete this block, greetingsPage.ts, teamsTab.ts and the manifest's
-  // `public_paths` entry if your agent has no pages.
+  // `public_paths` entry if your plugin has no pages.
   const greetingsRouter = createGreetingsRouter(() => ({ ...stats }));
 
   // 1. Browser: behind the omadia operator session. Spelled out on purpose —
@@ -88,11 +108,11 @@ export async function activate(ctx: PluginContext): Promise<AgentHandle> {
       routeId: 'greetings',
       path: '/teams/greetings',
       title: 'Greetings',
-      description: 'How many greetings the Hello agent served.',
+      description: 'How many greetings the Hello tools served.',
     }),
   );
 
-  ctx.log('activated', { tools: ['say_hello'], pages: [`${PAGE_MOUNT}/greetings`] });
+  ctx.log('activated', { tools: ['hello_say', 'hello_stats'], pages: [`${PAGE_MOUNT}/greetings`] });
 
   return {
     async close() {
@@ -102,4 +122,4 @@ export async function activate(ctx: PluginContext): Promise<AgentHandle> {
   };
 }
 
-export default { AGENT_ID, activate };
+export default { PLUGIN_ID, activate };

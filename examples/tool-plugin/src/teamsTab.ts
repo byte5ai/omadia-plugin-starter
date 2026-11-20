@@ -29,7 +29,7 @@ export interface TeamsTabPage {
 }
 
 export interface TeamsTabOptions {
-  /** Absolute mount of the shell router, e.g. `/p/agent-hello/teams`. */
+  /** Absolute mount of the shell router, e.g. `/p/tool-hello/teams`. */
   readonly mountPath: string;
   readonly pages: readonly TeamsTabPage[];
   /** The router(s) that render the pages. Merged into ONE data router: the

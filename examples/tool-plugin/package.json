@@ -1,10 +1,10 @@
 {
-  "name": "@acme/agent-hello",
+  "name": "@acme/tool-hello",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "dist/plugin.js",
-  "description": "A minimal example Omadia agent that exposes a single greeting tool.",
+  "description": "A minimal example Omadia capability plugin (kind tool) with two greeting tools.",
   "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit",

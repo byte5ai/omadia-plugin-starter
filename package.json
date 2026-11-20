@@ -1,6 +1,6 @@
 {
   "name": "omadia-plugin-starter",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Starter template for building Omadia plugins and channels, with a one-command ZIP build for upload.",
@@ -16,7 +16,7 @@
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
-    "build:agent": "npm run build -w examples/agent-plugin",
+    "build:tool": "npm run build -w examples/tool-plugin",
     "build:channel": "npm run build -w examples/channel",
     "clean": "npm run clean --workspaces --if-present",
     "test": "node --test scripts/lib/*.test.mjs",

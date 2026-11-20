@@ -10,7 +10,9 @@ schema_version: "1"            # erforderlich
 
 identity:
   id: "@you/your-plugin"       # erforderlich; Reverse-DNS, == package.json "name"
-  kind: "agent"                # "agent" (Default) | "channel" | "integration"
+  kind: "tool"                 # integration | tool | skill | channel | model |
+                               # archetype | system-module | agent-template
+                               # ("agent" und "extension" sind ausgemustert)
   domain: "your-domain"        # kurzer Routing-/Gruppierungs-Key
   name: "Your Plugin"          # Anzeigename
   version: "0.1.0"             # erforderlich; semver, == package.json "version"
@@ -25,8 +27,9 @@ identity:
   categories: ["examples"]     # optionale Store-Facetten
 
 compat:
-  core: ">=1.51.0 <2.0"        # Bereich der @omadia/plugin-api-Version DES HOSTS;
-                               # geprüft bei Upload und Installation (Default ">=1.0 <2.0")
+  core: ">=1.75.0 <2.0"        # Bereich der @omadia/plugin-api-Version DES HOSTS;
+                               # geprüft bei Upload und Installation (Default ">=1.0 <2.0").
+                               # Die neuen Kinds und agent_templates brauchen >=1.75.0
   node: ">=20"                 # optional
 
 depends_on: []                 # Plugin-Ids, die vorher installiert sein müssen;
@@ -70,7 +73,8 @@ setup:
       # multi: true                       # mehrere ausgewählte Werte erlauben
 
 permissions:                   # Least-Privilege; weggelassen = verweigert
-  memory:  { reads: [], writes: [] }     # Namespace-Globs, z. B. "agent:@you/x:*"
+  memory:  { reads: [], writes: [] }     # Namespace-Globs; nur technischer Zustand, ein
+                                         # Plugin hat keine Konversationserinnerung
   graph:
     reads:  []                           # Node-Labels, z. B. "Turn", "Person"
     writes: []
@@ -79,7 +83,8 @@ permissions:                   # Least-Privilege; weggelassen = verweigert
                                          # "odoo"/"confluence" reserviert (gestrippt)
   network:
     outbound: []                         # Hosts, "*.x.com" = eine Subdomain-Ebene;
-                                         # nicht leer → ctx.http existiert
+                                         # nicht leer → ctx.http existiert. Netz NUR über
+                                         # ctx.http (globaler fetch ist gesandboxt)
     outbound_tcp: []                     # [{ host, port }], Literal oder "$config.<feld>"
                                          # → ctx.net (SMTP, IMAP, …)
     web_scanner: false                   # true → ctx Web-Scanner-Oberfläche
@@ -92,10 +97,8 @@ permissions:                   # Least-Privilege; weggelassen = verweigert
     migrations: "migrations"
   filesystem: { scratch: false }         # true → ctx.scratch-Verzeichnis
   secrets: { runtime_write: false }      # true → ctx.secrets darf zur Laufzeit schreiben
-  subAgents:                             # calls nicht leer → ctx.subAgent
-    calls: []                            # erlaubte Sub-Agent-Ids; weggelassen = verweigert
-    calls_per_invocation: 5              # Budget pro Handler-Aufruf (Default 5)
-  llm:                                   # models_allowed nicht leer → ctx.llm
+  llm:                                   # models_allowed nicht leer → ctx.llm (der EINZIGE
+                                         # Modellzugang; läuft im Turn des aufrufenden Agenten)
     models_allowed: []                   # Modell-Globs, z. B. "claude-haiku-4-5*"
     calls_per_invocation: 2              # Default 5
     max_tokens_per_call: 1024            # Default 4096
@@ -103,24 +106,32 @@ permissions:                   # Least-Privilege; weggelassen = verweigert
   events: { emit: false }                # true → ctx.events.emit deklarierter Events
   mcp: false                             # true, oder { servers_hint: [...] } → ctx.mcp
 
-# ── nur Agents ─────────────────────────────────────────────────────────────
-capabilities:                  # die Tools, die der Orchestrator aufrufen kann
-  - id: "do_thing"
+# ── Capability-Plugins (Kinds tool / integration) ──────────────────────────
+capabilities:                  # ein Eintrag pro registriertem Tool
+  - id: "do_thing"             # == der ctx.tools.register-Name, eindeutig je Instanz
     description: "…"
     input_schema:  { type: "object", required: ["x"], properties: { x: { type: "string" } } }
     output_schema: { type: "object", properties: { y: { type: "string" } } }
-    side_effects: "read"       # "read" | "write"
+    side_effects: "read"       # "read" | "write" | "none"; ohne Angabe: unknown
     idempotent: true
     timeout_ms: 5000
     rate_limit: { per_minute: 30 }
 
-playbook:                      # Routing-Hinweise in natürlicher Sprache
+playbook:                      # Hinweise in natürlicher Sprache: wann die Tools nutzen
   when_to_use: "…"
   example_prompts: ["…"]
   not_for: ["…"]
 
-skills:                        # gebundelte Prompt-Partials / Schemas / Daten
-  - { id: "sys", kind: "prompt_partial", path: "skills/system.md" }
+agent_templates:               # inaktive Vorlagen für den Agent Builder (die Rolle,
+  - id: "greeter"              #   die ein Plugin nicht selbst tragen darf); eine je Sprache
+    name: "Begrüßer"
+    short_description: "…"     # <= 80
+    long_description: "…"      # <= 4000
+    instructions: "…"          # <= 20000
+    language: "de"             # BCP 47
+    capabilities: ["@you/your-plugin"]   # nur Vorschläge
+    # optional: archetype, verbosity (tldr|brief|standard|detailed|max),
+    #           persona: { axes: { warmth: 60 } }  — streng: unbekannte Felder lehnen ab
 
 jobs:                          # geplante Background-Jobs; braucht den Host-
   - name: "weekly-digest"      #   Scheduler. Gated auch ctx.jobs.register.
@@ -153,8 +164,40 @@ channel:
   adapters: ["text", "markdown"]               # Outbound-Render-Formen
 ```
 
-> Agents deklarieren `capabilities` + `playbook`; Channels deklarieren
-> stattdessen den `channel`-Block. Nicht mischen.
+> Capability-Plugins deklarieren `capabilities` + `playbook` (+ `agent_templates`);
+> Channels deklarieren stattdessen den `channel`-Block. Nicht mischen.
+
+### Kinds
+
+| Kind | In einem Satz |
+| --- | --- |
+| `integration` | Zugang zu einem System mit eigenen Zugangsdaten, angeboten als Tools und Services. |
+| `tool` | Tools mit lokaler Logik und ohne eigene Zugangsdaten. |
+| `skill` | Ein wiederverwendbares Vorgehen, dem ein Agent folgen kann. |
+| `channel` | Eine Oberfläche, die Nutzer-Nachrichten rein- und Antworten rausroutet. |
+| `model` | Ein Modell-, Embedding- oder Transkriptions-Anbieter; nur das Modell-Gateway des Kernels ruft ihn auf. |
+| `archetype` | Eine Art von Agent, im Agent Builder wählbar. |
+| `system-module` | Infrastruktur von omadia selbst. |
+| `agent-template` | Nur Agent-Vorlagen, keine Tools. |
+
+`agent` und `extension` sind ausgemustert. Eine frühere `extension` ist ein
+`system-module` (oder ein `model`-Plugin, wenn sie ein LLM-Anbieter ist); ein
+früheres `agent`-Plugin ist ein `tool`- oder `integration`-Plugin plus
+Agent-Vorlage.
+
+### Die Grenze (der Kernel lehnt sie beim Upload ab)
+
+- Kein `persona`, `speaker`, `personality` oder `system_prompt` im Manifest.
+- Kein `skills`-Eintrag mit `kind: prompt_partial`.
+- Keine `AGENT.md` (außer beim Kind `agent-template`).
+- Keine eigene Modell-Schleife und keine Persona: Ein Plugin liefert Tools,
+  der Agent spricht.
+- Modelle nur über `ctx.llm`. Kein `anthropicClient@1`, `llm@1` oder
+  `llmProviderPool` unter `requires`, kein eigener Anthropic-/OpenAI-Client,
+  kein direkter `fetch` auf Hosts von Modell-Anbietern. `embeddingClient@1`
+  und `transcription@1` bleiben erlaubt.
+- Netz nur über `ctx.http` (Allow-List `permissions.network.outbound`). Der
+  Kernel sandboxt den globalen `fetch` (`PLUGIN_EGRESS_MODE`).
 
 ### Erweiterte Felder
 
@@ -191,7 +234,7 @@ ein Feld nur, wenn du die Capability nutzt, die es gated.
   unter `/api/plugins/` oder unter einem Prefix, an dem das Plugin einen Router
   registriert, nie unter einer Core-Route. Der Operator gibt jeden Eintrag im
   Install-Dialog oder auf der Store-Seite frei; ohne Freigabe wird er nicht
-  ausgeliefert. Siehe [Seiten und Teams-Tabs](./02-agent-plugin-bauen.md#seiten-und-teams-tabs).
+  ausgeliefert. Siehe [Seiten und Teams-Tabs](./02-capability-plugin-bauen.md#seiten-und-teams-tabs).
 - **`permissions.sql`** — `{ ledger, migrations?, handoff? }`: plugin-eigene
   Tabellen. Der Ledger-Name muss mit `plg_` und deiner bereinigten Plugin-Id
   beginnen. Nach der Freigabe durch den Operator führt der Host das
@@ -200,12 +243,18 @@ ein Feld nur, wenn du die Capability nutzt, die es gated.
   overlap }`; `schedule` ist ein Cron-String, `{ cron }` oder
   `{ interval_ms }`; `overlap: skip | queue`). Braucht den Host-Scheduler;
   derselbe Check gated das programmatische `ctx.jobs.register`.
-- **`permissions.subAgents`** — `{ calls: [ids], calls_per_invocation }`
-  (Budget-Default 5). Ohne das ist `ctx.subAgent` `undefined`; ein Ziel
-  außerhalb von `calls` wirft `SubAgentPermissionDeniedError`.
+- **`side_effects`** (je `capabilities`-Eintrag) — `read`, `write` oder
+  `none`: `write` ändert ein System, `none` berührt keines. Ein Tool ohne
+  Eintrag gilt als `unknown`; deklariere also jedes registrierte Tool.
+- **`agent_templates`** — inaktive Agent-Vorlagen, streng gelesen (ein
+  unbekanntes Feld lehnt das Manifest ab). Persona-Achsen: `formality`,
+  `directness`, `warmth`, `humor`, `sarcasm`, `conciseness`, `proactivity`,
+  `autonomy`, `risk_tolerance`, `creativity`, `drama`, `philosophy` (0-100),
+  dazu optional `template` und `custom_notes` (<= 2000). Siehe
+  [02](./02-capability-plugin-bauen.md#agent-vorlagen).
 - **`permissions.llm`** — `{ models_allowed: [globs], calls_per_invocation (Def
-  5), max_tokens_per_call (Def 4096) }`. Stellt `ctx.llm` bereit (der Host
-  zahlt, kein API-Key im Plugin); ein Modell außerhalb der Liste wirft
+  5), max_tokens_per_call (Def 4096) }`. Stellt `ctx.llm` bereit, den einzigen
+  Weg eines Plugins zu einem Modell (der Host zahlt, kein API-Key im Plugin); ein Modell außerhalb der Liste wirft
   `LlmModelNotAllowedError`. `complete()` nimmt außerdem `outputFormat`
   (JSON-Schema, ab 1.22.0) und einen erzwungenen Tool-Aufruf (`tools` +
   `toolChoice`, ab 1.44.0).
@@ -248,7 +297,7 @@ ein Feld nur, wenn du die Capability nutzt, die es gated.
   `lifecycle.uninstall_policy`, `lifecycle.hooks`, `setup.self_test` und
   `skills[].shareable` werden akzeptiert, aber heute liest sie nichts. Um
   Credentials nach der Installation zu prüfen, exportiere `verifyConnection`
-  (siehe [02](./02-agent-plugin-bauen.md#die-verbindung-prüfen-verifyconnection)).
+  (siehe [02](./02-capability-plugin-bauen.md#die-verbindung-prüfen-verifyconnection)).
 - **`privacy_class`** — `default` oder `strict` (strengere PII-Behandlung);
   alles andere fällt auf `default` zurück.
 - **`is_reference_only: true`** — blendet das Plugin aus dem Operator-Store
@@ -284,8 +333,8 @@ Regeln:
   muss auf Ersteres zeigen.
 - **Kein `node_modules/`** — esbuild bundlet deine Nicht-Host-Deps in
   `dist/plugin.js`.
-- `skills/` muss in der ZIP sein, wenn dein Manifest Prompt-Partials
-  referenziert.
+- `skills/` ist nur für Daten eines `skill`-Plugins; ein Capability-Plugin
+  hat keine Prompt-Partials.
 
 ## Hochladen
 
@@ -311,9 +360,11 @@ halten) — und baue neu; der ZIP-Name (`out/<id>-<version>.zip`) ändert sich m
 ## Pre-Flight-Checkliste
 
 - [ ] `identity.id` == `package.json` `name`; `version`s stimmen überein.
-- [ ] Untergrenze von `compat.core` = plugin-api-Version der neuesten API, die du nutzt.
+- [ ] Untergrenze von `compat.core` = plugin-api-Version der neuesten API, die du nutzt (`>=1.75.0` für die neuen Kinds und `agent_templates`).
+- [ ] `identity.kind` ist nicht `agent` oder `extension`; keine Persona, kein `prompt_partial`-Skill, keine `AGENT.md`.
 - [ ] `lifecycle.entry: "dist/plugin.js"`.
-- [ ] Jedes registrierte Tool hat einen passenden `capabilities`-Eintrag (Agents).
+- [ ] Jedes registrierte Tool hat einen passenden `capabilities`-Eintrag mit `side_effects`.
+- [ ] Modelle nur über `ctx.llm`, Netz nur über `ctx.http`.
 - [ ] Jeder `ctx.secrets`/`ctx.config`-Key hat einen `setup.fields`-Eintrag.
 - [ ] Drittsystem-Setup (falls vorhanden) in einer lokalisierten `setup.guide` dokumentiert.
 - [ ] `permissions` listen genau die Hosts/Namespaces, die du nutzt — nicht mehr.

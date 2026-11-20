@@ -1,23 +1,88 @@
-# 02 · Build an agent plugin
+# 02 · Build a capability plugin
 
-An **agent** is a skill the orchestrator can pick and call. It declares one or
-more tools (`capabilities`) and implements them in code. The worked example is
-[`examples/agent-plugin`](../../examples/agent-plugin) — `@acme/agent-hello`.
-It also serves a page that works in the browser and as a Microsoft Teams tab
+A **capability plugin** delivers **tools** (manifest `kind: tool`, or
+`integration` when it connects to a system that needs credentials). It
+declares them (`capabilities`) and implements them in code. The operator
+grants the plugin to an agent in the Agent Builder, and that agent decides
+when to call the tools. The worked example is
+[`examples/tool-plugin`](../../examples/tool-plugin) — `@acme/tool-hello`. It
+also serves a page that works in the browser and as a Microsoft Teams tab
 ([Pages and Teams tabs](#pages-and-teams-tabs)).
+
+## What a plugin is, and what it is not
+
+A plugin is only the delivery form. Its manifest `identity.kind` is one of:
+
+| Kind | One sentence |
+| --- | --- |
+| `integration` | Access to a system (own credentials or own system), offered as tools and services. |
+| `tool` | A tool or a set of tools with local logic and no credentials of its own. |
+| `skill` | A reusable procedure an agent can follow. |
+| `channel` | A surface that routes user messages in and replies out ([03](./03-build-a-channel.md)). |
+| `model` | A model, embeddings or transcription provider; only the kernel's model gateway calls it. |
+| `archetype` | A kind of agent (how an agent behaves), selectable in the Agent Builder. |
+| `system-module` | Infrastructure of omadia itself. |
+| `agent-template` | Only templates (see below), no tools. |
+
+`agent` and `extension` are **retired** (`provider` and `ui` are retired names, too). A former `extension` is a `system-module`, or a `model` plugin
+when it is an LLM provider. A former `agent` plugin becomes a `tool` or
+`integration` plugin plus an agent template. The kernel rejects an upload that
+still uses a retired kind.
+
+**The boundary.** A plugin has no persona and no model loop of its own. The
+kernel refuses a manifest with `persona`, `speaker`, `personality` or
+`system_prompt`, a `skills` entry of `kind: prompt_partial`, or an `AGENT.md`
+(`AGENT.md` is allowed only for kind `agent-template`). There is no
+`ctx.subAgent` and no toolkit object returned from `activate`. A plugin has no
+conversation memory either; technical state of its own is fine.
+
+What used to be persona text goes to two places:
+
+- **Tool knowledge** (what a tool does, when to use it, what it cannot do)
+  goes into the tool `description` and `playbook.when_to_use`.
+- **The role** (who the agent is, how it works) goes into an **agent template**.
+
+## Agent templates
+
+`agent_templates` is a flat block of inactive presets in `manifest.yaml`. An
+operator turns one into an agent in the Agent Builder and grants the plugin
+there. Installing the plugin creates no agent and grants nothing. Ship one
+template per language:
+
+```yaml
+agent_templates:
+  - id: "greeter"                 # ^[a-z][a-z0-9-]{0,62}$, unique in the package
+    archetype: "standard"         # optional
+    name: "Greeter"               # <= 120
+    short_description: "…"        # <= 80
+    long_description: "…"         # <= 4000
+    instructions: |               # <= 20000: role and way of working
+      You are a warm, concise greeter. …
+    language: "en"                # BCP 47
+    verbosity: "brief"            # tldr | brief | standard | detailed | max (optional)
+    persona:                      # optional: Agent Builder axes, 0-100
+      axes: { warmth: 70, conciseness: 80 }
+    capabilities: ["@acme/tool-hello"]   # suggestions only
+```
+
+The block is read **strictly**: an unknown field gets the whole manifest
+rejected. Allowed persona axes: `formality`, `directness`, `warmth`, `humor`,
+`sarcasm`, `conciseness`, `proactivity`, `autonomy`, `risk_tolerance`,
+`creativity`, `drama`, `philosophy`; plus optional `template` and
+`custom_notes` (<= 2000).
 
 ## The contract
 
 ```ts
 import type { PluginContext } from '@omadia/plugin-api';
 
-export const AGENT_ID = '@acme/agent-hello' as const;
+export const PLUGIN_ID = '@acme/tool-hello' as const;
 
-export interface AgentHandle {
+export interface PluginHandle {
   close(): Promise<void>;
 }
 
-export async function activate(ctx: PluginContext): Promise<AgentHandle> {
+export async function activate(ctx: PluginContext): Promise<PluginHandle> {
   // …register tools, open resources…
   return {
     async close() {
@@ -26,14 +91,14 @@ export async function activate(ctx: PluginContext): Promise<AgentHandle> {
   };
 }
 
-export default { AGENT_ID, activate };
+export default { PLUGIN_ID, activate };
 ```
 
-- `activate` is called **once** when the agent is enabled. Keep it under
+- `activate` is called **once** when the plugin is enabled. Keep it under
   10 s: no full sync, no bulk crawl.
-- It returns a handle; the host calls `close()` on disable/uninstall/shutdown.
+- It returns `{ close }`, nothing else (no toolkit); the host calls `close()` on disable/uninstall/shutdown.
   Keep it under 5 s and really release timers, sockets and intervals.
-- `AGENT_ID` must equal `identity.id` in `manifest.yaml` **and** the package
+- `PLUGIN_ID` must equal `identity.id` in `manifest.yaml` **and** the package
   `name`.
 - Every `register(...)` on `ctx` returns a dispose function. Call them all from
   `close()`.
@@ -41,12 +106,13 @@ export default { AGENT_ID, activate };
 ## Registering a tool
 
 A tool is a JSON-schema input plus a handler that returns a **string** (usually
-JSON the model then reads):
+JSON the model then reads). Tool names are unique across the whole instance,
+so keep a plugin prefix (`hello_say`, not `say`):
 
 ```ts
 const dispose = ctx.tools.register(
   {
-    name: 'say_hello',
+    name: 'hello_say',
     description: 'Returns a friendly greeting for the given name.',
     input_schema: {
       type: 'object',
@@ -63,8 +129,27 @@ const dispose = ctx.tools.register(
 
 **Keep code and manifest in sync.** Every registered tool needs a matching
 entry under `capabilities` in `manifest.yaml` (same `id`/`name` and
-`input_schema`) — that declarative copy is what the orchestrator shows the
-model and uses to route calls.
+`input_schema`) — that declarative copy is what the kernel shows the model and
+uses to route calls.
+
+### Side effects
+
+Every capability states what the tool does to a system, in `side_effects`:
+
+```yaml
+capabilities:
+  - id: "hello_say"
+    side_effects: "none"      # read | write | none
+```
+
+| Value | Meaning |
+| --- | --- |
+| `read` | Reads a system, changes nothing. |
+| `write` | Changes a system. The kernel treats the call as one that needs care (confirmation, duplicate-write protection). |
+| `none` | Touches no system (pure computation, the plugin's own counter). |
+
+A registered tool without a `capabilities` entry counts as `unknown`, so
+declare every tool.
 
 The optional third argument (`ToolRegistrationOptions`):
 
@@ -72,7 +157,7 @@ The optional third argument (`ToolRegistrationOptions`):
 | --- | --- |
 | `promptDoc` | One paragraph spliced into the system prompt's tool list. |
 | `isAvailable: () => boolean` | Hide the tool (spec and `promptDoc`) on turns where it can only fail, e.g. a tool only some channels can serve. Evaluated per turn; must give the same answer for the whole turn. It only hides the tool: the handler must still answer a call truthfully. Since plugin-api 1.31.0; older hosts ignore it. |
-| `writeCapabilities` | Declare that the tool may mutate data, which opts it into duplicate-write protection. |
+| `writeCapabilities` | Declare that the tool may mutate data, which opts it into duplicate-write protection. Pair it with `side_effects: "write"`. |
 | `attachmentSink` | Per-turn collector for media the tool produced. |
 
 ### Errors the model can read
@@ -172,7 +257,11 @@ permissions:
 
 …and only then is `ctx.http` provisioned. Route **all** traffic through it so
 the allow-list, the SSRF guard and the rate limit (60 requests per rolling
-minute) apply:
+minute) apply. This is not just advice: the kernel sandboxes the global
+`fetch` (`PLUGIN_EGRESS_MODE`), so a plugin that reaches the network around
+`ctx.http` is blocked or logged. Do not use `node:http(s)` or an SDK with its
+own networking either; point an SDK at `ctx.http.fetch` when it lets you pass a
+`fetch` implementation.
 
 ```ts
 if (!ctx.http) throw new Error('manifest must declare permissions.network.outbound');
@@ -182,6 +271,24 @@ const res = await ctx.http.fetch('https://api.example.com/v1/ping');
 A host outside the list throws `HttpForbiddenError`, an exceeded budget
 `HttpRateLimitError`. Line protocols (SMTP, IMAP) go through `ctx.net.connect`,
 gated by `permissions.network.outbound_tcp`.
+
+## Using a model: `ctx.llm` only
+
+A plugin never talks to a model provider itself. When a tool needs a language
+model (extraction, summarising), declare `permissions.llm` and call
+`ctx.llm`: it runs inside the calling agent's turn, with the model allow-list,
+call budget and token cap of your manifest (see
+[04](./04-manifest-and-packaging.md)).
+
+Do **not**:
+
+- list `anthropicClient@1`, `llm@1` or `llmProviderPool` under `requires`,
+- create your own Anthropic or OpenAI client,
+- `fetch` a model provider host.
+
+Only `kind: model` plugins call model APIs, and only the kernel's model
+gateway calls them. `embeddingClient@1` and `transcription@1` stay allowed;
+the kernel binds them to the gateway.
 
 ## Using other plugins: `requires`, `optional_requires`, `depends_on`
 
@@ -246,7 +353,7 @@ same `public_paths` declaration as `'public'`.
 ### A page in the browser
 
 ```ts
-ctx.routes.register('/p/agent-hello', pageRouter, { auth: 'session' });
+ctx.routes.register('/p/tool-hello', pageRouter, { auth: 'session' });
 ctx.uiRoutes.register({ routeId: 'greetings', path: '/greetings', title: 'Greetings' });
 ```
 
@@ -261,7 +368,7 @@ label: { en, de }, href })` (or `pluginUi: true` for a bundled UI).
 A Teams tab opens its URL as a plain GET: no omadia session cookie, no token.
 A `'session'` page therefore answers 401 inside Teams. Do **not** fix that by
 switching a page that shows data to `'public'` or `'custom'`. Use the pattern
-the example implements ([`src/teamsTab.ts`](../../examples/agent-plugin/src/teamsTab.ts)):
+the example implements ([`src/teamsTab.ts`](../../examples/tool-plugin/src/teamsTab.ts)):
 
 | Prefix | `auth` | Serves |
 | --- | --- | --- |
@@ -270,8 +377,8 @@ the example implements ([`src/teamsTab.ts`](../../examples/agent-plugin/src/team
 | `/p/<slug>/teams/_data<path>` | `'teams-sso'` | the page, only with a valid Teams token |
 
 ```ts
-const MOUNT = '/p/agent-hello/teams';
-ctx.routes.register('/p/agent-hello', pageRouter, { auth: 'session' });
+const MOUNT = '/p/tool-hello/teams';
+ctx.routes.register('/p/tool-hello', pageRouter, { auth: 'session' });
 ctx.routes.register(MOUNT, teamsTab.shell, { auth: 'public' });
 ctx.routes.register(`${MOUNT}/_data`, teamsTab.data, { auth: 'teams-sso' });
 ctx.uiRoutes.register({ routeId: 'greetings', path: '/teams/greetings', title: 'Greetings' });
@@ -279,10 +386,10 @@ ctx.uiRoutes.register({ routeId: 'greetings', path: '/teams/greetings', title: '
 
 ```yaml
 compat:
-  core: ">=1.51.0 <2.0"
+  core: ">=1.75.0 <2.0"      # 1.51.0 is the floor for Teams SSO alone
 permissions:
   public_paths:
-    - "/p/agent-hello/teams"
+    - "/p/tool-hello/teams"
 ```
 
 - **The shell** loads the Teams JS SDK 2.34.0 from
@@ -353,38 +460,33 @@ const dispose = ctx.jobs.register(
 `overlap` is `'skip'` (default) or `'queue'`. A throw is logged and does not
 cancel future ticks.
 
-## Skills (prompt-partials)
+## No prompt-partials
 
-Ship reusable prompt fragments in `skills/` and reference them in the manifest:
-
-```yaml
-skills:
-  - id: "hello_system_prompt"
-    kind: "prompt_partial"
-    path: "skills/system-prompt.md"
-```
-
-They are bundled into the ZIP and loaded at activation.
+A capability plugin ships no `skills` of `kind: prompt_partial` and no
+`AGENT.md`; the kernel rejects both. Put tool knowledge into the tool
+descriptions and `playbook.when_to_use`, and the role into
+[`agent_templates`](#agent-templates).
 
 ## Build & install
 
 ```bash
-npm run build -w examples/agent-plugin
-# → examples/agent-plugin/out/acme-agent-hello-0.1.0.zip
+npm run build -w examples/tool-plugin
+# → examples/tool-plugin/out/acme-tool-hello-0.1.0.zip
 ```
 
-Upload via **admin UI → Store → Upload**, fill the setup form, and prompt the
-agent (e.g. *"Say hello to Ada."*). The browser page is at
-`/p/agent-hello/greetings`; the Teams tab needs the
-`/p/agent-hello/teams` grant and an active `@omadia/channel-teams`.
+Upload via **admin UI → Store → Upload**, fill the setup form, create an agent
+from the `greeter` template in the Agent Builder (or grant the plugin to an
+existing agent) and prompt it (e.g. *"Say hello to Ada."*). The browser page is at
+`/p/tool-hello/greetings`; the Teams tab needs the
+`/p/tool-hello/teams` grant and an active `@omadia/channel-teams`.
 
-## Alternative: the toolkit pattern
+## Many tools
 
-For agents with many tools and shared state, return the tools from `activate`
-as a toolkit object (`{ toolkit, close() }`) and keep the handlers in a
-separate module. It's the same contract — just a tidier way to organise a large
-tool surface. The single-`ctx.tools.register` form shown above is the simplest
-starting point.
+For a plugin with many tools and shared state, keep the handlers in a separate
+module (a toolkit of `{ name, description, input, run }`) and register them in
+one loop from `activate`, as the Plugin Builder's `tool` and `integration`
+boilerplates do (`registerTools.ts`). `activate` still returns only
+`{ close }`: the toolkit object is never returned to the kernel.
 
 → Next: [03 · Build a channel](./03-build-a-channel.md) ·
 [04 · Manifest & packaging](./04-manifest-and-packaging.md)

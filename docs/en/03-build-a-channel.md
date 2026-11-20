@@ -20,7 +20,7 @@ export async function activate(ctx: PluginContext, core: CoreApi): Promise<Chann
 }
 ```
 
-`ctx` is the same per-plugin context as an agent (secrets, config, routes).
+`ctx` is the same per-plugin context as a capability plugin (secrets, config, routes).
 `core` is the channel-only API:
 
 | `core` method | Use |

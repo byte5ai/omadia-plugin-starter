@@ -4,7 +4,7 @@ schema_version: "1"
 # @acme/channel-webhook — example Omadia channel (inbound JSON webhook).
 # A channel ROUTES turns: it receives native events, translates them to the
 # core IncomingTurn shape, drives the orchestrator, and renders the answer
-# back. It has NO capabilities/playbook of its own (those are for agents).
+# back. It has NO capabilities/playbook of its own (those are for capability plugins).
 # ===========================================================================
 
 identity:
