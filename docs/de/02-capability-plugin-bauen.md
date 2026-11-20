@@ -403,7 +403,7 @@ ctx.uiRoutes.register({ routeId: 'greetings', path: '/teams/greetings', title: '
 
 ```yaml
 compat:
-  core: ">=1.76.0 <2.0"      # 1.51.0 ist die Untergrenze allein für Teams-SSO
+  core: ">=1.77.0 <2.0"      # 1.51.0 ist die Untergrenze allein für Teams-SSO
 permissions:
   public_paths:
     - "/p/tool-hello/teams"

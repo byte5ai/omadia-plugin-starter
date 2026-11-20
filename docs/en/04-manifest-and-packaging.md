@@ -27,9 +27,9 @@ identity:
   categories: ["examples"]     # optional store facets
 
 compat:
-  core: ">=1.76.0 <2.0"        # range of the HOST's @omadia/plugin-api version;
+  core: ">=1.77.0 <2.0"        # range of the HOST's @omadia/plugin-api version;
                                # checked at upload and install (default ">=1.0 <2.0").
-                               # The new kinds and agent_templates need >=1.76.0
+                               # The new kinds and agent_templates need >=1.77.0
   node: ">=20"                 # optional
 
 depends_on: []                 # plugin ids that must be installed first; their
@@ -347,7 +347,7 @@ ZIP name (`out/<id>-<version>.zip`) changes with it.
 ## Pre-flight checklist
 
 - [ ] `identity.id` == `package.json` `name`; `version`s match.
-- [ ] `compat.core` lower bound = the plugin-api version of the newest API you use (`>=1.76.0` for the new kinds and `agent_templates`).
+- [ ] `compat.core` lower bound = the plugin-api version of the newest API you use (`>=1.77.0` for the new kinds and `agent_templates`).
 - [ ] `identity.kind` is not `agent` or `extension`; no persona, `prompt_partial` skill or `AGENT.md`.
 - [ ] `lifecycle.entry: "dist/plugin.js"`.
 - [ ] Every registered tool has a matching `capabilities` entry with `side_effects`.
