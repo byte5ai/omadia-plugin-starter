@@ -89,7 +89,7 @@ Hochladen der ZIP und noch einmal bei der Installation gegen seine eigene
 plugin-api-Version und lehnt das Paket außerhalb davon ab
 (`package.incompatible_core` / `install.incompatible_core`). Setz die
 Untergrenze auf die plugin-api-Version, die das Neueste eingeführt hat, das du
-nutzt, zum Beispiel `">=1.51.0 <2.0"` für `auth: 'teams-sso'`; die neuen Kinds und `agent_templates` brauchen `">=1.75.0 <2.0"`. Ohne `compat`
+nutzt, zum Beispiel `">=1.51.0 <2.0"` für `auth: 'teams-sso'`; die neuen Kinds und `agent_templates` brauchen `">=1.76.0 <2.0"`. Ohne `compat`
 gilt `">=1.0 <2.0"`.
 
 ## ZIP bauen

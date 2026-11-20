@@ -49,7 +49,7 @@ Der Kernel lehnt ein Plugin beim Upload ab, das sie verletzt:
 - **Tools deklarieren `side_effects`.** Jedes mit `ctx.tools.register` registrierte Tool hat einen `capabilities`-Eintrag mit `side_effects: read | write | none`; ohne Eintrag gilt es als `unknown`. `activate` gibt `{ close }` zurück, kein Toolkit.
 - **Modelle nur über `ctx.llm`.** Keine rohen Modell-Services (`anthropicClient@1`, `llm@1`, `llmProviderPool`), kein eigener Anthropic-/OpenAI-Client, kein direkter Aufruf eines Modell-Anbieter-Hosts.
 - **Netz nur über `ctx.http`.** Der Kernel sandboxt den globalen `fetch` (`PLUGIN_EGRESS_MODE`); erlaubte Hosts stehen in `permissions.network.outbound`.
-- **`compat.core`** ist `">=1.75.0 <2.0"` für alles, was die neuen Kinds oder `agent_templates` nutzt; ältere Kerne können sie nicht laden.
+- **`compat.core`** ist `">=1.76.0 <2.0"` für alles, was die neuen Kinds oder `agent_templates` nutzt; ältere Kerne können sie nicht laden.
 
 ---
 

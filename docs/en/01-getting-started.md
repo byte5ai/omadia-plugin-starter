@@ -87,7 +87,7 @@ older than the one you compiled against. Say which versions you support in
 when the ZIP is uploaded and again at install, and refuses the package
 outside it (`package.incompatible_core` / `install.incompatible_core`). Set
 the lower bound to the plugin-api version that introduced the newest thing
-you use, for example `">=1.51.0 <2.0"` for `auth: 'teams-sso'`; the new kinds and `agent_templates` need `">=1.75.0 <2.0"`. Omitting
+you use, for example `">=1.51.0 <2.0"` for `auth: 'teams-sso'`; the new kinds and `agent_templates` need `">=1.76.0 <2.0"`. Omitting
 `compat` means `">=1.0 <2.0"`.
 
 ## Build a ZIP

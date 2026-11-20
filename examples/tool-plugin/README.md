@@ -31,7 +31,7 @@ npm run build -w examples/tool-plugin
 ```
 
 Upload that ZIP in the omadia admin UI (**Store → Upload**). It needs a host
-whose plugin-api is 1.75.0 or newer (`compat.core`).
+whose plugin-api is 1.76.0 or newer (`compat.core`).
 
 ## Make it yours
 

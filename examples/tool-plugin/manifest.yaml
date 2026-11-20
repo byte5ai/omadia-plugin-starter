@@ -30,10 +30,10 @@ identity:
 
 # Checked against the HOST's @omadia/plugin-api version when the ZIP is
 # uploaded and when it is installed; outside the range the host refuses the
-# package. The kinds `tool` etc. and `agent_templates` load from 1.75.0 on;
+# package. The kinds `tool` etc. and `agent_templates` load from 1.76.0 on;
 # older cores reject them. (`auth: 'teams-sso'` exists since 1.51.0.)
 compat:
-  core: ">=1.75.0 <2.0"
+  core: ">=1.76.0 <2.0"
   node: ">=20"
 
 # Other plugins this plugin needs activated first (e.g. the integration whose
