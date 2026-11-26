@@ -73,8 +73,13 @@ setup:
       # multi: true                       # allow multiple selected values
 
 permissions:                   # least-privilege; omitted = denied
-  memory:  { reads: [], writes: [] }     # namespace globs; technical state only, a plugin
-                                         # has no conversation memory
+  memory:
+    reads: []                            # namespace globs; technical state only, a plugin
+    writes: []                           # has no conversation memory
+    trees: []                            # own top-level /memories trees for memoryStore@1,
+                                         # e.g. ["pairings"]; the first plugin to use a
+                                         # tree owns it. core and _* are read-only, private
+                                         # trees unreachable (omadia ADR-0256)
   graph:
     reads:  []                           # node labels, e.g. "Turn", "Person"
     writes: []
@@ -235,6 +240,14 @@ field only when you use the capability it gates.
   id. After the
   operator grants it, the host runs the migrations directory before
   `activate()` and provides `ctx.sql`.
+  If the plugin also resolves the shared `graphPool`, each statement may
+  name only its own tables: a statement naming a kernel table, a `$$` body,
+  `DO`, `CREATE FUNCTION` or a SQL-text function is refused with
+  `SqlTableRefusedError` (omadia ADR-0255).
+- **`permissions.memory.trees`** — top-level `/memories` trees the plugin's
+  `memoryStore@1` may read and change. The first plugin to use a tree owns
+  it; another plugin gets `MemoryPathError`. Every plugin reads `core` and
+  the `_*` trees and changes neither (omadia ADR-0256).
 - **`jobs`** — scheduled background work (`{ name, schedule, timeout_ms,
   overlap }`; `schedule` is a cron string, `{ cron }` or `{ interval_ms }`;
   `overlap: skip | queue`). Needs the host scheduler; the same check guards
