@@ -73,8 +73,14 @@ setup:
       # multi: true                       # mehrere ausgewählte Werte erlauben
 
 permissions:                   # Least-Privilege; weggelassen = verweigert
-  memory:  { reads: [], writes: [] }     # Namespace-Globs; nur technischer Zustand, ein
-                                         # Plugin hat keine Konversationserinnerung
+  memory:
+    reads: []                            # Namespace-Globs; nur technischer Zustand, ein
+    writes: []                           # Plugin hat keine Konversationserinnerung
+    trees: []                            # eigene Top-Level-Bäume unter /memories für
+                                         # memoryStore@1, z. B. ["pairings"]; das erste
+                                         # Plugin, das einen Baum benutzt, besitzt ihn.
+                                         # core und _* nur lesbar, private Bäume
+                                         # unerreichbar (omadia ADR-0256)
   graph:
     reads:  []                           # Node-Labels, z. B. "Turn", "Person"
     writes: []
@@ -239,6 +245,15 @@ ein Feld nur, wenn du die Capability nutzt, die es gated.
   Tabellen. Der Ledger-Name muss mit `plg_` und deiner bereinigten Plugin-Id
   beginnen. Nach der Freigabe durch den Operator führt der Host das
   Migrationsverzeichnis vor `activate()` aus und stellt `ctx.sql` bereit.
+  Löst das Plugin zusätzlich den geteilten `graphPool` auf, darf jedes
+  Statement nur die eigenen Tabellen nennen: Ein Statement mit einer
+  Kernel-Tabelle, einem `$$`-Body, `DO`, `CREATE FUNCTION` oder einer
+  SQL-Text-Funktion wird mit `SqlTableRefusedError` abgelehnt (omadia ADR-0255).
+- **`permissions.memory.trees`** — Top-Level-Bäume unter `/memories`, die das
+  `memoryStore@1` des Plugins lesen und ändern darf. Das erste Plugin, das
+  einen Baum benutzt, besitzt ihn; jedes andere bekommt `MemoryPathError`.
+  Jedes Plugin liest `core` und die `_*`-Bäume und ändert keinen davon
+  (omadia ADR-0256).
 - **`jobs`** — geplante Background-Arbeit (`{ name, schedule, timeout_ms,
   overlap }`; `schedule` ist ein Cron-String, `{ cron }` oder
   `{ interval_ms }`; `overlap: skip | queue`). Braucht den Host-Scheduler;
